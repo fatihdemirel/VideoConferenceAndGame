@@ -47,6 +47,26 @@
         </div>
       </div>
       <div class="conference-main">
+        <!-- TicTacToe oyun paneli (ilk 2 katılımcı) -->
+        <div id="gamePanel" class="game-panel">
+          <div class="game-header">
+            <h3>XOX</h3>
+            <div id="gameScore" class="game-score">X: 0 — O: 0</div>
+            <span id="gameStatus" class="game-status">Bekleniyor...</span>
+          </div>
+          <div id="gameBoard" class="game-board">
+            <div class="game-cell" data-index="0"></div>
+            <div class="game-cell" data-index="1"></div>
+            <div class="game-cell" data-index="2"></div>
+            <div class="game-cell" data-index="3"></div>
+            <div class="game-cell" data-index="4"></div>
+            <div class="game-cell" data-index="5"></div>
+            <div class="game-cell" data-index="6"></div>
+            <div class="game-cell" data-index="7"></div>
+            <div class="game-cell" data-index="8"></div>
+          </div>
+          <button id="gameResetBtn" class="btn btn-icon" style="margin-top: 12px; width: 100%;">Yeniden Başla</button>
+        </div>
         <div id="videos" class="videos-container">
         <div class="video-wrapper local" id="localVideoWrapper">
           <video id="localVideo" autoplay muted playsinline></video>
@@ -76,6 +96,17 @@
       <div class="status-bar">
         <span id="connectionStatus">Bağlanıyor...</span>
         <span id="participantCount">0 katılımcı</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Oyun yeniden başlat onayı -->
+  <div id="gameResetModal" class="permission-modal hidden">
+    <div class="permission-modal-content">
+      <p id="gameResetModalText">Rakibin oyunu yeniden başlatmak istiyor. Kabul ediyor musun?</p>
+      <div class="permission-modal-actions">
+        <button id="gameResetAcceptBtn" class="btn btn-primary">Kabul</button>
+        <button id="gameResetRejectBtn" class="btn btn-icon">Reddet</button>
       </div>
     </div>
   </div>
