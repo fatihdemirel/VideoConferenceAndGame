@@ -20,6 +20,10 @@
   padding: 0;
 }
 
+.hidden {
+  display: none !important;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg-dark);
@@ -178,6 +182,7 @@ body {
   padding: 16px 24px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
+  position: relative;
 }
 
 .header h2 {
@@ -190,6 +195,67 @@ body {
   gap: 8px;
 }
 
+.header-menu-btn {
+  display: none;
+}
+
+.header-menu-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .header-actions {
+    display: none;
+  }
+
+  .header-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+  }
+
+  .header-menu-btn .hamburger-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .header-menu-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 200;
+  }
+
+  .header-menu-overlay:not(.hidden) {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 60px 16px 0;
+  }
+
+  .header-menu-dropdown {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 200px;
+    box-shadow: var(--shadow);
+  }
+
+  .header-menu-item {
+    justify-content: flex-start;
+    padding: 12px 16px;
+    width: 100%;
+  }
+}
+
 /* Conference main + chat layout */
 .conference-main {
   flex: 1;
@@ -198,10 +264,10 @@ body {
   overflow: hidden;
 }
 
-/* TicTacToe oyun paneli */
+/* Oyun paneli – soldan açılır kapanır */
 .game-panel {
-  width: 200px;
-  min-width: 200px;
+  width: 210px;
+  min-width: 210px;
   padding: 16px;
   background: var(--bg-card);
   border-right: 1px solid var(--border);
@@ -209,16 +275,78 @@ body {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  transition: width 0.25s ease, min-width 0.25s ease, padding 0.25s ease, border 0.25s ease;
+}
+
+.game-panel.game-panel-collapsed {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right: none;
+  overflow: hidden;
+}
+
+.game-panel .game-active {
+  overflow-y: auto;
 }
 
 .game-header {
   margin-bottom: 12px;
 }
 
-.game-header h3 {
+/* Oyun kataloğu */
+.game-catalog h3,
+.game-pending .game-pending-status {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.game-catalog h3 {
+  color: white;
+}
+
+.game-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-catalog-item {
+  padding: 12px 16px;
+  background: var(--bg-dark);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  color: white;
+}
+
+.game-catalog-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+/* Bekleme / Katıl */
+.game-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-pending-status {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.game-active .game-header h3 {
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 4px;
+  color: white;
 }
 
 .game-score {
@@ -288,9 +416,231 @@ body {
   border-color: #00ba7c;
 }
 
+/* Amiral Batı */
+.game-battleship .battle-boards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-battleship .battle-board-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.battle-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.battle-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  max-width: 160px;
+  aspect-ratio: 1;
+}
+
+.battle-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.battle-cell.ship {
+  background: #1a4d6d;
+}
+
+.battle-cell.hit {
+  background: #c53030;
+}
+
+.battle-cell.miss {
+  background: var(--bg-elevated);
+  opacity: 0.7;
+}
+
+.battle-cell.shootable {
+  cursor: pointer;
+}
+
+.battle-cell.shootable:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.battle-cell.placement-cell {
+  cursor: pointer;
+}
+
+.battle-cell.placement-cell:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.battle-placement-ship {
+  margin-bottom: 8px;
+}
+
+.battle-placement-ship .btn-small {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.battle-placement-ship .btn-small.active {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+/* Oyun paneli overlay – mobilde ardalan */
+.game-panel-overlay {
+  display: none;
+}
+
 @media (max-width: 900px) {
-  .game-panel {
+  .game-panel-overlay {
     display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 149;
+  }
+
+  .game-panel-overlay:not(.hidden) {
+    display: block;
+  }
+
+  .game-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    max-width: 85vw;
+    min-width: 0;
+    padding: 16px;
+    overflow-y: auto;
+    z-index: 150;
+    border-right: 1px solid var(--border);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+
+  .game-panel:not(.game-panel-collapsed) {
+    transform: translateX(0);
+  }
+
+  .game-panel.game-panel-collapsed {
+    width: 260px;
+    max-width: 85vw;
+    padding: 16px;
+    transform: translateX(-100%);
+  }
+
+  .game-board {
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(3, 42px);
+    gap: 3px;
+  }
+
+  .game-cell {
+    width: 42px;
+    height: 42px;
+    font-size: 1.1rem;
+  }
+
+  .game-catalog-item {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  .game-battleship .battle-boards {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .game-battleship .battle-board-wrap {
+    width: 100%;
+  }
+
+  .game-battleship .battle-grid {
+    max-width: 100%;
+    width: min(100%, 180px);
+    margin: 0 auto;
+    gap: 3px;
+  }
+
+  .game-battleship .battle-cell {
+    min-width: 12px;
+    min-height: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-panel {
+    width: 240px;
+    padding: 12px;
+  }
+
+  .game-board {
+    grid-template-columns: repeat(3, 36px);
+    grid-template-rows: repeat(3, 36px);
+    gap: 2px;
+  }
+
+  .game-cell {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .game-battleship .battle-grid {
+    width: min(100%, 150px);
+    gap: 2px;
+  }
+
+  .game-battleship .battle-cell {
+    min-width: 10px;
+    min-height: 10px;
+    border-width: 1px;
+  }
+
+  .game-header h3,
+  .game-catalog h3 {
+    font-size: 0.9rem;
+  }
+
+  .game-status,
+  .game-score {
+    font-size: 0.75rem;
+  }
+
+  .battle-placement-ship .btn-small {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .game-battleship .battle-grid {
+    width: min(100%, 130px);
+  }
+
+  .game-battleship .battle-cell {
+    min-width: 8px;
+    min-height: 8px;
   }
 }
 

@@ -31,6 +31,9 @@
       <div class="header">
         <h2 id="roomTitle">Oda: -</h2>
         <div class="header-actions">
+          <button id="gameToggleBtn" class="btn btn-icon" title="Oyunlar">
+            <span>🎮</span>
+          </button>
           <button id="chatToggleBtn" class="btn btn-icon" title="Sohbet">
             <span>💬</span>
           </button>
@@ -45,27 +48,86 @@
           </button>
           <button id="leaveBtn" class="btn btn-danger">Ayrıl</button>
         </div>
+        <button id="headerMenuBtn" class="btn btn-icon header-menu-btn" title="Menü" aria-label="Menü">
+          <span class="hamburger-icon">☰</span>
+        </button>
       </div>
+      <div id="headerMenuOverlay" class="header-menu-overlay hidden">
+        <div class="header-menu-dropdown">
+          <button id="gameToggleBtnMenu" class="btn btn-icon header-menu-item" title="Oyunlar">🎮 Oyunlar</button>
+          <button id="chatToggleBtnMenu" class="btn btn-icon header-menu-item" title="Sohbet">💬 Sohbet</button>
+          <button id="screenShareBtnMenu" class="btn btn-icon header-menu-item" title="Ekran paylaş">🖥️ Ekran paylaş</button>
+          <button id="toggleMuteBtnMenu" class="btn btn-icon header-menu-item" title="Mikrofon"><span id="muteIconMenu">🎤</span> Mikrofon</button>
+          <button id="toggleVideoBtnMenu" class="btn btn-icon header-menu-item" title="Kamera"><span id="videoIconMenu">📹</span> Kamera</button>
+          <button id="leaveBtnMenu" class="btn btn-danger header-menu-item">Ayrıl</button>
+        </div>
+      </div>
+      <div id="gamePanelOverlay" class="game-panel-overlay hidden"></div>
       <div class="conference-main">
-        <!-- TicTacToe oyun paneli (ilk 2 katılımcı) -->
-        <div id="gamePanel" class="game-panel">
-          <div class="game-header">
-            <h3>XOX</h3>
-            <div id="gameScore" class="game-score">X: 0 — O: 0</div>
-            <span id="gameStatus" class="game-status">Bekleniyor...</span>
+        <!-- Oyun paneli – soldan açılır kapanır -->
+        <div id="gamePanel" class="game-panel game-panel-collapsed">
+          <!-- Oyun kataloğu -->
+          <div id="gameCatalog" class="game-catalog">
+            <h3>Oyunlar</h3>
+            <div class="game-catalog-list">
+              <button class="game-catalog-item" data-game="tictactoe">XOX</button>
+              <button class="game-catalog-item" data-game="battleship">Amiral Battı</button>
+            </div>
           </div>
-          <div id="gameBoard" class="game-board">
-            <div class="game-cell" data-index="0"></div>
-            <div class="game-cell" data-index="1"></div>
-            <div class="game-cell" data-index="2"></div>
-            <div class="game-cell" data-index="3"></div>
-            <div class="game-cell" data-index="4"></div>
-            <div class="game-cell" data-index="5"></div>
-            <div class="game-cell" data-index="6"></div>
-            <div class="game-cell" data-index="7"></div>
-            <div class="game-cell" data-index="8"></div>
+          <!-- Bekleme / Katıl -->
+          <div id="gamePending" class="game-pending hidden">
+            <div id="gamePendingStatus" class="game-pending-status"></div>
+            <button id="gameJoinBtn" class="btn btn-primary hidden">Katıl</button>
+            <button id="gameCancelBtn" class="btn btn-icon hidden">İptal</button>
           </div>
-          <button id="gameResetBtn" class="btn btn-icon" style="margin-top: 12px; width: 100%;">Yeniden Başla</button>
+          <!-- Aktif oyun: TicTacToe -->
+          <div id="gameActive" class="game-active hidden">
+            <div class="game-header">
+              <h3>XOX</h3>
+              <div id="gameScore" class="game-score">X: 0 — O: 0</div>
+              <span id="gameStatus" class="game-status">Bekleniyor...</span>
+            </div>
+            <div id="gameBoard" class="game-board">
+              <div class="game-cell" data-index="0"></div>
+              <div class="game-cell" data-index="1"></div>
+              <div class="game-cell" data-index="2"></div>
+              <div class="game-cell" data-index="3"></div>
+              <div class="game-cell" data-index="4"></div>
+              <div class="game-cell" data-index="5"></div>
+              <div class="game-cell" data-index="6"></div>
+              <div class="game-cell" data-index="7"></div>
+              <div class="game-cell" data-index="8"></div>
+            </div>
+            <button id="gameResetBtn" class="btn btn-icon" style="margin-top: 12px; width: 100%;">Yeniden Başla</button>
+          </div>
+          <!-- Aktif oyun: Amiral Battı -->
+          <div id="gameActiveBattleship" class="game-active game-battleship hidden">
+            <div class="game-header">
+              <h3>Amiral Battı</h3>
+              <div id="battleScore" class="game-score">0 — 0</div>
+              <span id="battleStatus" class="game-status">Bekleniyor...</span>
+            </div>
+            <div id="battlePlacement" class="battle-placement">
+              <div class="battle-placement-status" id="battlePlacementStatus">Gemilerini yerleştir</div>
+              <div class="battle-placement-ship" id="battlePlacementShip"></div>
+              <div class="battle-board-wrap">
+                <div class="battle-label">Filonu yerleştir</div>
+                <div id="battlePlacementBoard" class="battle-grid"></div>
+              </div>
+              <button id="battleReadyBtn" class="btn btn-primary hidden" style="margin-top: 8px">Hazır</button>
+            </div>
+            <div id="battleBoards" class="battle-boards hidden">
+              <div class="battle-board-wrap">
+                <div class="battle-label">Senin filosu</div>
+                <div id="battleMyBoard" class="battle-grid"></div>
+              </div>
+              <div class="battle-board-wrap">
+                <div class="battle-label">Rakibe ateş</div>
+                <div id="battleEnemyBoard" class="battle-grid"></div>
+              </div>
+            </div>
+            <button id="battleResetBtn" class="btn btn-icon" style="margin-top: 12px; width: 100%;">Yeniden Başla</button>
+          </div>
         </div>
         <div id="videos" class="videos-container">
         <div class="video-wrapper local" id="localVideoWrapper">
