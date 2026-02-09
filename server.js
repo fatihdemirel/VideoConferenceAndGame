@@ -5,11 +5,26 @@
 
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
-const server = http.createServer(app);
+
+const useHttps = process.env.HTTPS === '1' || process.env.HTTPS === 'true';
+const certPath = process.env.SSL_CRT_FILE || path.join(__dirname, 'cert.pem');
+const keyPath = process.env.SSL_KEY_FILE || path.join(__dirname, 'key.pem');
+
+let server;
+if (useHttps && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+  server = https.createServer(
+    { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) },
+    app
+  );
+} else {
+  server = http.createServer(app);
+}
 const io = new Server(server);
 
 // Statik dosyalar
@@ -418,6 +433,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const protocol = server instanceof https.Server ? 'https' : 'http';
 server.listen(PORT, () => {
-  console.log(`Video Konferans sunucusu çalışıyor: http://localhost:${PORT}`);
+  console.log(`Video Konferans sunucusu çalışıyor: ${protocol}://localhost:${PORT}`);
 });
