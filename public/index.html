@@ -31,6 +31,9 @@
       <div class="header">
         <h2 id="roomTitle">Oda: -</h2>
         <div class="header-actions">
+          <button id="gameToggleBtn" class="btn btn-icon" title="Oyunlar">
+            <span>🎮</span>
+          </button>
           <button id="chatToggleBtn" class="btn btn-icon" title="Sohbet">
             <span>💬</span>
           </button>
@@ -45,10 +48,24 @@
           </button>
           <button id="leaveBtn" class="btn btn-danger">Ayrıl</button>
         </div>
+        <button id="headerMenuBtn" class="btn btn-icon header-menu-btn" title="Menü" aria-label="Menü">
+          <span class="hamburger-icon">☰</span>
+        </button>
       </div>
+      <div id="headerMenuOverlay" class="header-menu-overlay hidden">
+        <div class="header-menu-dropdown">
+          <button id="gameToggleBtnMenu" class="btn btn-icon header-menu-item" title="Oyunlar">🎮 Oyunlar</button>
+          <button id="chatToggleBtnMenu" class="btn btn-icon header-menu-item" title="Sohbet">💬 Sohbet</button>
+          <button id="screenShareBtnMenu" class="btn btn-icon header-menu-item" title="Ekran paylaş">🖥️ Ekran paylaş</button>
+          <button id="toggleMuteBtnMenu" class="btn btn-icon header-menu-item" title="Mikrofon"><span id="muteIconMenu">🎤</span> Mikrofon</button>
+          <button id="toggleVideoBtnMenu" class="btn btn-icon header-menu-item" title="Kamera"><span id="videoIconMenu">📹</span> Kamera</button>
+          <button id="leaveBtnMenu" class="btn btn-danger header-menu-item">Ayrıl</button>
+        </div>
+      </div>
+      <div id="gamePanelOverlay" class="game-panel-overlay hidden"></div>
       <div class="conference-main">
-        <!-- Oyun paneli – katalog / bekleme / oyun -->
-        <div id="gamePanel" class="game-panel">
+        <!-- Oyun paneli – soldan açılır kapanır -->
+        <div id="gamePanel" class="game-panel game-panel-collapsed">
           <!-- Oyun kataloğu -->
           <div id="gameCatalog" class="game-catalog">
             <h3>Oyunlar</h3>

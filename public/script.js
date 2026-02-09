@@ -29,6 +29,9 @@ const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
 const gamePanel = document.getElementById('gamePanel');
+const gameToggleBtn = document.getElementById('gameToggleBtn');
+const headerMenuBtn = document.getElementById('headerMenuBtn');
+const headerMenuOverlay = document.getElementById('headerMenuOverlay');
 const gameCatalog = document.getElementById('gameCatalog');
 const gamePending = document.getElementById('gamePending');
 const gameActive = document.getElementById('gameActive');
@@ -117,6 +120,66 @@ function getConferenceUrl(roomId) {
   url.searchParams.set('room', roomId);
   return url.toString();
 }
+
+const gamePanelOverlay = document.getElementById('gamePanelOverlay');
+
+// Oyun paneli aç/kapa
+function toggleGamePanel() {
+  gamePanel?.classList.toggle('game-panel-collapsed');
+  if (gamePanelOverlay) {
+    gamePanelOverlay.classList.toggle('hidden', gamePanel?.classList.contains('game-panel-collapsed'));
+  }
+}
+
+gameToggleBtn?.addEventListener('click', toggleGamePanel);
+
+gamePanelOverlay?.addEventListener('click', () => {
+  gamePanel?.classList.add('game-panel-collapsed');
+  gamePanelOverlay?.classList.add('hidden');
+});
+
+// Hamburger menü
+function openHeaderMenu() {
+  headerMenuOverlay?.classList.remove('hidden');
+}
+
+function closeHeaderMenu() {
+  headerMenuOverlay?.classList.add('hidden');
+}
+
+headerMenuBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  headerMenuOverlay?.classList.toggle('hidden');
+});
+
+headerMenuOverlay?.addEventListener('click', (e) => {
+  if (e.target === headerMenuOverlay) closeHeaderMenu();
+});
+
+document.getElementById('gameToggleBtnMenu')?.addEventListener('click', () => {
+  toggleGamePanel();
+  closeHeaderMenu();
+});
+document.getElementById('chatToggleBtnMenu')?.addEventListener('click', () => {
+  chatToggleBtn?.click();
+  closeHeaderMenu();
+});
+document.getElementById('screenShareBtnMenu')?.addEventListener('click', () => {
+  screenShareBtn?.click();
+  closeHeaderMenu();
+});
+document.getElementById('toggleMuteBtnMenu')?.addEventListener('click', () => {
+  toggleMuteBtn?.click();
+  closeHeaderMenu();
+});
+document.getElementById('toggleVideoBtnMenu')?.addEventListener('click', () => {
+  toggleVideoBtn?.click();
+  closeHeaderMenu();
+});
+document.getElementById('leaveBtnMenu')?.addEventListener('click', () => {
+  leaveBtn?.click();
+  closeHeaderMenu();
+});
 
 // Chat panel
 chatToggleBtn.addEventListener('click', () => {
@@ -362,10 +425,14 @@ function renderBattleshipState(state) {
     battlePlacement?.classList.remove('hidden');
     battleBoards?.classList.add('hidden');
     if (!myShips) {
-      battlePlacementShips = [];
-      battlePlacementShipIndex = 0;
-      renderBattleshipPlacement();
-      battlePlacementStatus.textContent = 'Gemilerini yerleştir';
+      const isFreshGame = !state.ships1 && !state.ships2;
+      if (isFreshGame || battlePlacementShips.length === 0) {
+        battlePlacementShips = [];
+        battlePlacementShipIndex = 0;
+        renderBattleshipPlacement();
+      } else {
+        updatePlacementUI();
+      }
       battlePlacementShip?.classList.remove('hidden');
     } else {
       battlePlacementStatus.textContent = 'Rakip gemilerini yerleştiriyor...';
@@ -859,6 +926,9 @@ function leaveRoom() {
   if (chatMessages) chatMessages.innerHTML = '';
   if (chatPanel) chatPanel.classList.add('hidden');
   if (gameResetModal) gameResetModal.classList.add('hidden');
+  closeHeaderMenu();
+  gamePanel?.classList.add('game-panel-collapsed');
+  gamePanelOverlay?.classList.add('hidden');
   pendingGame = null;
   showGameView('catalog');
   renderGameState(null);
@@ -891,10 +961,18 @@ function updateLocalVideoPlaceholder() {
 function updateMediaButtons() {
   const hasAudio = localStream?.getAudioTracks().length > 0;
   const hasVideo = localStream?.getVideoTracks().length > 0;
-  document.getElementById('muteIcon').textContent = !hasAudio ? '🔇' : (isMuted ? '🔇' : '🎤');
-  document.getElementById('videoIcon').textContent = !hasVideo ? '📷' : (isVideoOff ? '📷' : '📹');
-  toggleMuteBtn.title = !hasAudio ? 'Mikrofonu aç' : (isMuted ? 'Sesi aç' : 'Sesi kapat');
-  toggleVideoBtn.title = !hasVideo ? 'Kamerayı aç' : (isVideoOff ? 'Kamerayı aç' : 'Kamerayı kapat');
+  const muteIconEl = document.getElementById('muteIcon');
+  const videoIconEl = document.getElementById('videoIcon');
+  const muteIconMenuEl = document.getElementById('muteIconMenu');
+  const videoIconMenuEl = document.getElementById('videoIconMenu');
+  const muteIcon = !hasAudio ? '🔇' : (isMuted ? '🔇' : '🎤');
+  const videoIcon = !hasVideo ? '📷' : (isVideoOff ? '📷' : '📹');
+  if (muteIconEl) muteIconEl.textContent = muteIcon;
+  if (muteIconMenuEl) muteIconMenuEl.textContent = muteIcon;
+  if (videoIconEl) videoIconEl.textContent = videoIcon;
+  if (videoIconMenuEl) videoIconMenuEl.textContent = videoIcon;
+  if (toggleMuteBtn) toggleMuteBtn.title = !hasAudio ? 'Mikrofonu aç' : (isMuted ? 'Sesi aç' : 'Sesi kapat');
+  if (toggleVideoBtn) toggleVideoBtn.title = !hasVideo ? 'Kamerayı aç' : (isVideoOff ? 'Kamerayı aç' : 'Kamerayı kapat');
   updateLocalVideoPlaceholder();
 }
 
@@ -987,8 +1065,7 @@ toggleMuteBtn.addEventListener('click', () => {
   }
   isMuted = !isMuted;
   localStream.getAudioTracks().forEach(track => { track.enabled = !isMuted; });
-  document.getElementById('muteIcon').textContent = isMuted ? '🔇' : '🎤';
-  toggleMuteBtn.title = isMuted ? 'Sesi aç' : 'Sesi kapat';
+  updateMediaButtons();
 });
 
 // Kamera aç/kapa - mobilde getUserMedia tıklamada HEMEN çağrılmalı (await öncesi)
@@ -1011,8 +1088,7 @@ toggleVideoBtn.addEventListener('click', () => {
   }
   isVideoOff = !isVideoOff;
   localStream.getVideoTracks().forEach(track => { track.enabled = !isVideoOff; });
-  document.getElementById('videoIcon').textContent = isVideoOff ? '📷' : '📹';
-  toggleVideoBtn.title = isVideoOff ? 'Kamerayı aç' : 'Kamerayı kapat';
+  updateMediaButtons();
   updateLocalVideoPlaceholder();
 });
 
