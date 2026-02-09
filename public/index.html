@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Konferans</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Bağlantı ekranı -->
+    <div id="lobby" class="lobby">
+      <div class="lobby-card">
+        <h1>Video Konferans</h1>
+        <p class="subtitle">WebRTC ile gerçek zamanlı görüşme</p>
+        <div class="form-group">
+          <label for="roomId">Oda ID</label>
+          <input type="text" id="roomId" placeholder="örn: toplantı-123" maxlength="20">
+          <small>Aynı oda ID'sini kullanan herkes aynı görüşmeye katılır</small>
+        </div>
+        <p class="optional-hint">Kamera ve mikrofon izni zorunlu değil — görüşme içinde açabilirsiniz</p>
+        <button id="joinBtn" class="btn btn-primary">
+          <span class="btn-icon">▶</span>
+          Odaya Katıl
+        </button>
+      </div>
+    </div>
+
+    <!-- Görüşme ekranı -->
+    <div id="conference" class="conference hidden">
+      <div class="header">
+        <h2 id="roomTitle">Oda: -</h2>
+        <div class="header-actions">
+          <button id="chatToggleBtn" class="btn btn-icon" title="Sohbet">
+            <span>💬</span>
+          </button>
+          <button id="screenShareBtn" class="btn btn-icon" title="Ekran paylaş">
+            <span>🖥️</span>
+          </button>
+          <button id="toggleMuteBtn" class="btn btn-icon" title="Mikrofon">
+            <span id="muteIcon">🎤</span>
+          </button>
+          <button id="toggleVideoBtn" class="btn btn-icon" title="Kamera">
+            <span id="videoIcon">📹</span>
+          </button>
+          <button id="leaveBtn" class="btn btn-danger">Ayrıl</button>
+        </div>
+      </div>
+      <div class="conference-main">
+        <div id="videos" class="videos-container">
+        <div class="video-wrapper local" id="localVideoWrapper">
+          <video id="localVideo" autoplay muted playsinline></video>
+          <div class="video-placeholder local-placeholder" id="localPlaceholder">
+            <span class="placeholder-initial">S</span>
+            <span class="placeholder-name">Sen</span>
+          </div>
+          <div class="video-label">Sen</div>
+        </div>
+        <div id="remoteVideos" class="remote-videos"></div>
+      </div>
+
+      <!-- Chat panel -->
+      <div id="chatPanel" class="chat-panel hidden">
+        <div class="chat-header">
+          <h3>Sohbet</h3>
+          <button id="chatCloseBtn" class="btn btn-icon" title="Kapat">✕</button>
+        </div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Mesaj yazın..." maxlength="500" autocomplete="off">
+          <button id="chatSendBtn" class="btn btn-chat-send" title="Gönder">→</button>
+        </div>
+      </div>
+      </div>
+
+      <div class="status-bar">
+        <span id="connectionStatus">Bağlanıyor...</span>
+        <span id="participantCount">0 katılımcı</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- İzin reddedildi modal (mobil) -->
+  <div id="permissionModal" class="permission-modal hidden">
+    <div class="permission-modal-content">
+      <p id="permissionModalText">Kamera erişimi reddedildi.</p>
+      <p class="permission-modal-hint">Tarayıcı ayarlarından site izinlerini kontrol edin.</p>
+      <div class="permission-modal-actions">
+        <button id="permissionRetryBtn" class="btn btn-primary">İzin Ver / Tekrar Dene</button>
+        <button id="permissionCloseBtn" class="btn btn-icon">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
