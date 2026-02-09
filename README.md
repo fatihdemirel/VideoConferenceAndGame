@@ -10,6 +10,9 @@ WebRTC tabanlı basit video konferans uygulaması. Tarayıcıdan doğrudan peer-
 - 📹 Kamera aç/kapa
 - 🔗 Oda tabanlı katılım (aynı oda ID'si = aynı görüşme)
 - 📱 Responsive arayüz
+- 🎮 **Oyunlar** – Görüşme sırasında oynanabilir oyunlar:
+  - **XOX (TicTacToe)** – Klasik 3x3 X-O oyunu
+  - **Amiral Battı** – İki kişilik deniz savaşı oyunu
 
 ## Teknolojiler
 
@@ -38,6 +41,13 @@ Uygulama `http://localhost:3000` adresinde çalışacaktır.
 5. Başka bir sekme veya cihazda aynı oda ID'si ile katılın
 
 **İpucu:** Aynı görüşmeye katılmak için tüm katılımcıların aynı oda ID'sini kullanması gerekir.
+
+## Oyunlar
+
+Konferans sırasında sol menüden (🎮) oyunlar açılabilir. Oyunlar yalnızca odaya katılan ilk iki oyuncu arasında oynanır:
+
+- **XOX:** Biri oyunu seçer, diğeri "Katıl" ile oyuna girer. Skor tutulur; yeniden başlatmak için rakip onayı gerekir.
+- **Amiral Battı:** Aynı şekilde seçim ve katılım. Her oyuncu gemilerini yerleştirir, ardından sırayla ateş eder. Tüm düşman gemilerini batıran kazanır.
 
 ## Geliştirme
 
