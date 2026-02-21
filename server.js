@@ -374,6 +374,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Kamera kapatıldığında odadaki diğer kullanıcılara bildir (karşı tarafta ikon gösterilsin)
+  socket.on('video-off', () => {
+    if (socket.roomId) socket.to(socket.roomId).emit('peer-video-off', { userId: socket.id });
+  });
+  // Kamera tekrar açıldığında diğer kullanıcılara bildir (onunmute bazen tetiklenmediği için)
+  socket.on('video-on', () => {
+    if (socket.roomId) socket.to(socket.roomId).emit('peer-video-on', { userId: socket.id });
+  });
+
   // Odadan ayrıl (buton ile)
   socket.on('leave-room', () => {
     if (socket.roomId) {
