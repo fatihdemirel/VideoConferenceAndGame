@@ -10,11 +10,15 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const path = require('path');
 
+const ROOT_DIR = path.join(__dirname, '..');
+const CLIENT_DIR = path.join(ROOT_DIR, 'client');
+const CERT_DIR = path.join(ROOT_DIR, 'cert');
+
 const app = express();
 
 const useHttps = process.env.HTTPS === '1' || process.env.HTTPS === 'true';
-const certPath = process.env.SSL_CRT_FILE || path.join(__dirname, 'cert.pem');
-const keyPath = process.env.SSL_KEY_FILE || path.join(__dirname, 'key.pem');
+const certPath = process.env.SSL_CRT_FILE || path.join(CERT_DIR, 'cert.pem');
+const keyPath = process.env.SSL_KEY_FILE || path.join(CERT_DIR, 'key.pem');
 
 let server;
 if (useHttps && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
@@ -27,12 +31,12 @@ if (useHttps && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
 }
 const io = new Server(server);
 
-// Statik dosyalar
-app.use(express.static(path.join(__dirname, 'public')));
+// Statik dosyalar (ön yüz)
+app.use(express.static(CLIENT_DIR));
 
 // Ana sayfa
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(CLIENT_DIR, 'index.html'));
 });
 
 // Oda bilgileri: { roomId: { users: Set<string>, userOrder: string[] } }
@@ -149,7 +153,6 @@ function checkWinner(board) {
 io.on('connection', (socket) => {
   console.log('Yeni kullanıcı bağlandı:', socket.id);
 
-  // Odaya katıl
   socket.on('join-room', (roomId) => {
     if (!rooms.has(roomId)) {
       rooms.set(roomId, { users: new Set(), userOrder: [] });
@@ -167,7 +170,6 @@ io.on('connection', (socket) => {
     const otherUsers = [...room.users].filter(id => id !== socket.id);
     socket.emit('room-users', otherUsers);
 
-    // Mevcut oyun/pending durumunu gönder
     const game = gameState.get(roomId);
     if (game?.player1 && game?.player2) {
       socket.emit('game-state', game);
@@ -179,7 +181,6 @@ io.on('connection', (socket) => {
     console.log(`${socket.id} odaya katıldı: ${roomId}`);
   });
 
-  // WebRTC sinyalleri
   socket.on('offer', ({ to, offer }) => {
     socket.to(to).emit('offer', { from: socket.id, offer });
   });
@@ -192,7 +193,6 @@ io.on('connection', (socket) => {
     socket.to(to).emit('ice-candidate', { from: socket.id, candidate });
   });
 
-  // Oyun kataloğu – seçen 1. oyuncu, katılan 2. oyuncu
   socket.on('game-select', (gameId) => {
     if (!socket.roomId || !gameId) return;
     const room = rooms.get(socket.roomId);
@@ -235,7 +235,6 @@ io.on('connection', (socket) => {
     io.to(socket.roomId).emit('game-pending-cleared');
   });
 
-  // TicTacToe hamle
   socket.on('game-move', (index) => {
     index = parseInt(index, 10);
     if (!socket.roomId || isNaN(index) || index < 0 || index > 8) return;
@@ -364,7 +363,6 @@ io.on('connection', (socket) => {
     socket.to(requester).emit('game-reset-rejected');
   });
 
-  // Sohbet mesajı
   socket.on('chat-message', (message) => {
     if (socket.roomId && typeof message === 'string' && message.trim()) {
       io.to(socket.roomId).emit('chat-message', {
@@ -374,16 +372,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Kamera kapatıldığında odadaki diğer kullanıcılara bildir (karşı tarafta ikon gösterilsin)
   socket.on('video-off', () => {
     if (socket.roomId) socket.to(socket.roomId).emit('peer-video-off', { userId: socket.id });
   });
-  // Kamera tekrar açıldığında diğer kullanıcılara bildir (onunmute bazen tetiklenmediği için)
   socket.on('video-on', () => {
     if (socket.roomId) socket.to(socket.roomId).emit('peer-video-on', { userId: socket.id });
   });
 
-  // Odadan ayrıl (buton ile)
   socket.on('leave-room', () => {
     if (socket.roomId) {
       socket.to(socket.roomId).emit('user-left', socket.id);

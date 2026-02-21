@@ -750,9 +750,21 @@ function addRemoteVideo(userId, stream) {
       wrapper.insertBefore(video, wrapper.querySelector('.video-label'));
     }
     video.srcObject = stream;
-    video.style.display = 'block';
+    video.style.display = 'none'; // İlk bağlanan kullanıcı siyah görmesin: video gelene kadar ikon göster
+    if (placeholder) placeholder.style.display = 'flex';
     video.play().catch(() => {});
-    if (placeholder) placeholder.style.display = 'none';
+    // Video gerçekten oynayana kadar placeholder göster, sonra videoya geç (ilk bağlanan siyah görmesin)
+    let timeoutId;
+    const showVideoWhenReady = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      video.style.display = 'block';
+      if (placeholder) placeholder.style.display = 'none';
+      video.removeEventListener('loadeddata', showVideoWhenReady);
+      video.removeEventListener('playing', showVideoWhenReady);
+    };
+    video.addEventListener('loadeddata', showVideoWhenReady);
+    video.addEventListener('playing', showVideoWhenReady);
+    timeoutId = setTimeout(showVideoWhenReady, 1500); // Yüklenmezse en fazla 1.5 sn sonra videoya geç
     // Kamera kapatıldığında karşı tarafta siyah kalmasın: video track mute olunca placeholder göster (bazı ortamlarda ontrack.onmute gecikebilir)
     stream.getVideoTracks().forEach(t => {
       t.onmute = () => showRemotePlaceholder(userId);

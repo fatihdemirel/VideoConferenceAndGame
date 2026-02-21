@@ -2,12 +2,12 @@
   "name": "videoconf",
   "version": "1.0.0",
   "description": "WebRTC tabanlı video konferans uygulaması",
-  "main": "server.js",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "start:https": "node -e \"process.env.HTTPS='1';require('./server.js')\"",
-    "cert": "node create-cert.js"
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "start:https": "node -e \"process.env.HTTPS='1';require('./server/server.js')\"",
+    "cert": "node scripts/create-cert.js"
   },
   "keywords": ["webrtc", "video", "conference"],
   "author": "",

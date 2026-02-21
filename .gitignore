@@ -1,3 +1,5 @@
 node_modules/
-*.pem
 .env
+
+# Sertifika dosyaları (cert/ klasörü)
+cert/*.pem

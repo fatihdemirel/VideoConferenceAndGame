@@ -14,6 +14,18 @@ WebRTC tabanlı basit video konferans uygulaması. Tarayıcıdan doğrudan peer-
   - **XOX (TicTacToe)** – Klasik 3x3 X-O oyunu
   - **Amiral Battı** – İki kişilik deniz savaşı oyunu
 
+## Proje yapısı
+
+```
+VideoConf/
+├── client/          # Ön yüz (HTML, CSS, JS)
+├── server/          # Arka yüz (Node.js signaling sunucusu)
+├── cert/            # HTTPS sertifika dosyaları (cert.pem, key.pem)
+├── scripts/         # Yardımcı scriptler (sertifika oluşturma vb.)
+├── package.json
+└── README.md
+```
+
 ## Teknolojiler
 
 - **Backend:** Node.js, Express, Socket.io (signaling)
@@ -46,7 +58,7 @@ npm install
 npm run cert
 ```
 
-veya doğrudan: `node create-cert.js`
+veya doğrudan: `node scripts/create-cert.js` (sertifikalar `cert/` klasörüne yazılır)
 
 2. Sunucuyu HTTPS ile başlatın:
 
@@ -63,7 +75,7 @@ Windows PowerShell: `$env:HTTPS="1"; npm start`
 
 ```bash
 mkcert -install
-mkcert -key-file key.pem -cert-file cert.pem localhost 127.0.0.1
+mkcert -key-file cert/key.pem -cert-file cert/cert.pem localhost 127.0.0.1
 set HTTPS=1
 npm start
 ```

@@ -1,16 +1,21 @@
 /**
  * Self-signed HTTPS sertifikası oluşturur (OpenSSL gerekmez).
- * Proje klasöründe çalıştırın: node create-cert.js
+ * Sertifikalar cert/ klasörüne yazılır. Çalıştırın: npm run cert
  */
 const fs = require('fs');
 const path = require('path');
 
-const certPath = path.join(__dirname, 'cert.pem');
-const keyPath = path.join(__dirname, 'key.pem');
+const CERT_DIR = path.join(__dirname, '..', 'cert');
+const certPath = path.join(CERT_DIR, 'cert.pem');
+const keyPath = path.join(CERT_DIR, 'key.pem');
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-  console.log('cert.pem ve key.pem zaten mevcut.');
+  console.log('cert.pem ve key.pem zaten mevcut (cert/ klasöründe).');
   process.exit(0);
+}
+
+if (!fs.existsSync(CERT_DIR)) {
+  fs.mkdirSync(CERT_DIR, { recursive: true });
 }
 
 async function main() {
@@ -20,10 +25,10 @@ async function main() {
     const pems = await selfsigned.generate(attrs, { days: 365, keySize: 2048 });
     fs.writeFileSync(certPath, pems.cert);
     fs.writeFileSync(keyPath, pems.private);
-    console.log('Sertifika oluşturuldu: cert.pem, key.pem');
+    console.log('Sertifika oluşturuldu: cert/cert.pem, cert/key.pem');
   } catch (e) {
     console.error('Hata: selfsigned paketi gerekli. Çalıştırın: npm install selfsigned');
-    console.error('Sonra tekrar: node create-cert.js');
+    console.error('Sonra tekrar: npm run cert');
     process.exit(1);
   }
 }
