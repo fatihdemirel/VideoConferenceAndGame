@@ -32,6 +32,58 @@ npm start
 
 Uygulama `http://localhost:3000` adresinde çalışacaktır.
 
+## HTTPS ile çalıştırma
+
+Kamera/mikrofon birçok tarayıcıda yalnızca **güvenli bağlamda** (HTTPS veya localhost) çalışır. Uzaktan erişim veya mobilde test için HTTPS kullanın.
+
+### Yerel (self-signed sertifika)
+
+1. Sertifika oluşturun (OpenSSL gerekmez). **Proje klasöründe** (VideoConf) terminal/PowerShell açıp:
+
+```bash
+cd c:\Projects\VideoConf
+npm install
+npm run cert
+```
+
+veya doğrudan: `node create-cert.js`
+
+2. Sunucuyu HTTPS ile başlatın:
+
+```bash
+set HTTPS=1
+npm start
+```
+
+Windows PowerShell: `$env:HTTPS="1"; npm start`
+
+3. Tarayıcıda `https://localhost:3000` açın. Self-signed uyarısında "Gelişmiş" → "localhost'a devam et" ile geçin.
+
+**Alternatif (güvenilir yerel sertifika):** [mkcert](https://github.com/FiloSottile/mkcert) ile tarayıcı uyarı vermez:
+
+```bash
+mkcert -install
+mkcert -key-file key.pem -cert-file cert.pem localhost 127.0.0.1
+set HTTPS=1
+npm start
+```
+
+### Kendi sertifikanız
+
+Sertifika ve anahtar dosya yollarını ortam değişkeni ile verebilirsiniz:
+
+```bash
+set HTTPS=1
+set SSL_CRT_FILE=C:\yol\cert.pem
+set SSL_KEY_FILE=C:\yol\key.pem
+npm start
+```
+
+### Canlı (production) yayın
+
+- **Önerilen:** Uygulamayı HTTP (3000) ile çalıştırıp önüne **Nginx** veya **Caddy** koyun; SSL’i reverse proxy üzerinde sonlandırın (Let’s Encrypt ile ücretsiz sertifika).
+- Alternatif: Node’u doğrudan HTTPS ile çalıştırıp Let’s Encrypt (örn. certbot) ile alınan `fullchain.pem` / `privkey.pem` dosyalarını `SSL_CRT_FILE` ve `SSL_KEY_FILE` ile kullanın.
+
 ## Kullanım
 
 1. Tarayıcıda `http://localhost:3000` adresini açın

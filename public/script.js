@@ -62,6 +62,7 @@ const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
 let localStream = null;
 let peerConnections = {};
 let iceCandidateQueue = {}; // userId -> [candidates] (remote description gelmeden önce buffer)
+const remoteStreams = {};   // userId -> MediaStream (uzak kullanıcının tüm track'leri tek stream'de; sadece kamera gelse de görünsün)
 let currentRoomId = null;
 let isMuted = false;
 let isVideoOff = false;
@@ -561,24 +562,17 @@ async function createPeerConnection(userId, isOfferer = false) {
 
   pc.ontrack = (event) => {
     const track = event.track;
-    const stream = event.streams?.[0] || event.stream;
-    if (stream) {
-      addRemoteVideo(userId, stream);
-      if (stream.getAudioTracks().length) setupAudioLevelDetection(userId, stream);
-      if (track.kind === 'video') {
-        track.onmute = () => showRemotePlaceholder(userId);
-        track.onunmute = () => {
-          const w = document.getElementById(`remote-${userId}`);
-          const s = w?.querySelector('video')?.srcObject;
-          if (s) addRemoteVideo(userId, s);
-        };
-        track.onended = () => showRemotePlaceholder(userId);
-        if (track.muted) showRemotePlaceholder(userId);
-      }
-      stream.onremovetrack = (e) => {
-        if (e.track.kind === 'video') showRemotePlaceholder(userId);
-      };
+    if (!remoteStreams[userId]) remoteStreams[userId] = new MediaStream();
+    const stream = remoteStreams[userId];
+    stream.addTrack(track);
+    if (track.kind === 'video') {
+      track.onmute = () => showRemotePlaceholder(userId);
+      track.onunmute = () => addRemoteVideo(userId, stream);
+      track.onended = () => showRemotePlaceholder(userId);
+      if (track.muted) showRemotePlaceholder(userId);
     }
+    addRemoteVideo(userId, stream);
+    if (stream.getAudioTracks().length) setupAudioLevelDetection(userId, stream);
   };
 
   pc.onicecandidate = (event) => {
@@ -591,7 +585,7 @@ async function createPeerConnection(userId, isOfferer = false) {
   };
 
   pc.onnegotiationneeded = async () => {
-    // Sadece kurulmuş bağlantıda yeniden müzakere (track eklendiğinde)
+    if (addingTrackToPeers) return; // addTrackToPeerConnections kendi renegotiation'ını yapıyor
     if (pc.signalingState !== 'stable') return;
     try {
       const offer = await pc.createOffer();
@@ -713,6 +707,26 @@ function addParticipantPlaceholder(userId) {
   remoteVideos.appendChild(wrapper);
 }
 
+// Uzak katılımcının sesini her zaman ayrı <audio> ile oynat (video varken de); bazı tarayıcılarda <video> sesi güvenilir oynatmıyor
+function ensureRemoteAudioElement(wrapper, stream) {
+  if (!stream?.getAudioTracks().length) return;
+  let remoteAudio = wrapper.querySelector('.remote-audio');
+  if (!remoteAudio) {
+    remoteAudio = document.createElement('audio');
+    remoteAudio.className = 'remote-audio';
+    remoteAudio.autoplay = true;
+    remoteAudio.setAttribute('playsinline', '');
+    remoteAudio.style.position = 'absolute';
+    remoteAudio.style.opacity = '0';
+    remoteAudio.style.pointerEvents = 'none';
+    remoteAudio.style.width = '0';
+    remoteAudio.style.height = '0';
+    wrapper.appendChild(remoteAudio);
+  }
+  remoteAudio.srcObject = stream;
+  remoteAudio.play().catch(() => {});
+}
+
 // Uzak video ekle veya güncelle (kamera açıldığında)
 function addRemoteVideo(userId, stream) {
   let wrapper = document.getElementById(`remote-${userId}`);
@@ -732,14 +746,20 @@ function addRemoteVideo(userId, stream) {
       video = document.createElement('video');
       video.autoplay = true;
       video.playsInline = true;
+      video.muted = false;
       wrapper.insertBefore(video, wrapper.querySelector('.video-label'));
     }
     video.srcObject = stream;
     video.style.display = 'block';
     video.play().catch(() => {});
     if (placeholder) placeholder.style.display = 'none';
-    let remoteAudio = wrapper.querySelector('.remote-audio');
-    if (remoteAudio) remoteAudio.remove();
+    // Kamera kapatıldığında karşı tarafta siyah kalmasın: video track mute olunca placeholder göster (bazı ortamlarda ontrack.onmute gecikebilir)
+    stream.getVideoTracks().forEach(t => {
+      t.onmute = () => showRemotePlaceholder(userId);
+      t.onunmute = () => addRemoteVideo(userId, stream);
+    });
+    // Video varken de sesi ayrı <audio> ile oynat; bazı tarayıcılarda <video> sesi oynatmıyor (autoplay politikası vb.)
+    ensureRemoteAudioElement(wrapper, stream);
   } else {
     // Sadece ses veya kamera kapalı - placeholder göster, ses için gizli audio
     let placeholder = wrapper.querySelector('.video-placeholder');
@@ -751,29 +771,24 @@ function addRemoteVideo(userId, stream) {
     }
     placeholder.style.display = 'flex';
     const v = wrapper.querySelector('video');
-    if (v) v.style.display = 'none';
+    if (v) {
+      v.style.display = 'none';
+      v.srcObject = null;
+    }
 
     if (stream?.getAudioTracks().length) {
-      let remoteAudio = wrapper.querySelector('.remote-audio');
-      if (!remoteAudio) {
-        remoteAudio = document.createElement('audio');
-        remoteAudio.className = 'remote-audio';
-        remoteAudio.autoplay = true;
-        remoteAudio.setAttribute('playsinline', '');
-        wrapper.appendChild(remoteAudio);
-      }
-      remoteAudio.srcObject = stream;
-      remoteAudio.play().catch(() => {});
+      ensureRemoteAudioElement(wrapper, stream);
     }
   }
 
   if (stream?.getAudioTracks().length) setupAudioLevelDetection(userId, stream);
 }
 
-// Uzak katılımcıda kamera kapatıldığında placeholder göster
+// Uzak katılımcıda kamera kapatıldığında placeholder göster (siyah ekran kalmasın)
 function showRemotePlaceholder(userId) {
   const wrapper = document.getElementById(`remote-${userId}`);
   if (!wrapper) return;
+  wrapper.dataset.hasVideo = 'false';
   let placeholder = wrapper.querySelector('.video-placeholder');
   if (!placeholder) {
     placeholder = document.createElement('div');
@@ -783,7 +798,10 @@ function showRemotePlaceholder(userId) {
   }
   placeholder.style.display = 'flex';
   const v = wrapper.querySelector('video');
-  if (v) v.style.display = 'none';
+  if (v) {
+    v.style.display = 'none';
+    v.srcObject = null; // Siyah kare kalmaması için stream'i kaldır
+  }
 }
 
 // Uzak videoyu kaldır
@@ -791,6 +809,10 @@ function removeRemoteVideo(userId) {
   stopAudioLevelDetection(userId);
   const wrapper = document.getElementById(`remote-${userId}`);
   if (wrapper) wrapper.remove();
+  if (remoteStreams[userId]) {
+    remoteStreams[userId].getTracks().forEach(t => t.stop());
+    delete remoteStreams[userId];
+  }
   if (peerConnections[userId]) {
     peerConnections[userId].close();
     delete peerConnections[userId];
@@ -825,6 +847,17 @@ socket.on('user-joined', () => {
 
 socket.on('user-left', (userId) => {
   removeRemoteVideo(userId);
+});
+
+// Bir katılımcı kamerayı kapattığında karşı tarafta ikon (placeholder) göster
+socket.on('peer-video-off', ({ userId }) => {
+  showRemotePlaceholder(userId);
+});
+
+// Bir katılımcı kamerayı tekrar açtığında karşı tarafta videoyu göster (onunmute bazen tetiklenmediği için)
+socket.on('peer-video-on', ({ userId }) => {
+  const stream = remoteStreams[userId];
+  if (stream) addRemoteVideo(userId, stream);
 });
 
 async function handleNewUser(userId) {
@@ -887,6 +920,8 @@ socket.on('answer', async ({ from, answer }) => {
       }
     }
     delete iceCandidateQueue[from];
+    // Önce kamera açıldıysa: ilk offer sadece data channel ile gitti, cevap gelince artık stable olduk — bekleyen track'leri gönder
+    ensureLocalTracksSent();
   }
 });
 
@@ -946,15 +981,15 @@ function leaveRoom() {
   connectionStatus.classList.remove('connected');
 }
 
-// Medya butonlarını güncelle
+// Medya butonlarını güncelle — kamera kapalıyken yerel kullanıcı ikonu (placeholder) göster
 function updateLocalVideoPlaceholder() {
-  const hasVideo = localStream?.getVideoTracks().some(t => t.enabled) ?? false;
+  const hasActiveVideo = localStream?.getVideoTracks().some(t => t.enabled) ?? false;
   const placeholder = document.getElementById('localPlaceholder');
   if (placeholder) {
-    placeholder.style.display = hasVideo ? 'none' : 'flex';
+    placeholder.style.display = hasActiveVideo ? 'none' : 'flex';
   }
   if (localVideo) {
-    localVideo.style.display = hasVideo ? 'block' : 'none';
+    localVideo.style.display = hasActiveVideo ? 'block' : 'none';
   }
 }
 
@@ -976,13 +1011,68 @@ function updateMediaButtons() {
   updateLocalVideoPlaceholder();
 }
 
-// Eklenen track'leri tüm peer connections'a yayımla (renegotiation tetiklenir)
-function addTrackToPeerConnections(track, stream) {
-  Object.entries(peerConnections).forEach(([userId, pc]) => {
-    const sender = pc.getSenders().find(s => s.track?.kind === track.kind);
-    if (sender) sender.replaceTrack(track);
-    else pc.addTrack(track, stream);
-  });
+// Renegotiation sırasında onnegotiationneeded'ın çift offer göndermesini engelle
+let addingTrackToPeers = false;
+// Önce kamera açıldığında: track eklendi ama stable olmadığı için offer atılamadı — answer gelince bu userId'ler için offer at
+const pendingRenegotiation = new Set();
+
+// Answer gelip bağlantı stable olduktan sonra: bekleyen track'ler veya localStream'de olup gönderilmeyen track'ler için offer at
+async function ensureLocalTracksSent() {
+  if (!localStream) return;
+  addingTrackToPeers = true;
+  try {
+    for (const [userId, pc] of Object.entries(peerConnections)) {
+      if (pc.signalingState !== 'stable') continue;
+      const senders = pc.getSenders();
+      const hasVideo = senders.some(s => s.track?.kind === 'video');
+      const hasAudio = senders.some(s => s.track?.kind === 'audio');
+      const needVideo = localStream.getVideoTracks().length > 0 && !hasVideo;
+      const needAudio = localStream.getAudioTracks().length > 0 && !hasAudio;
+      const hadPending = pendingRenegotiation.has(userId);
+      pendingRenegotiation.delete(userId);
+      if (!hadPending && !needVideo && !needAudio) continue;
+      if (needVideo) pc.addTrack(localStream.getVideoTracks()[0], localStream);
+      if (needAudio) pc.addTrack(localStream.getAudioTracks()[0], localStream);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', { to: userId, offer: pc.localDescription });
+      } catch (e) {
+        console.warn('ensureLocalTracksSent renegotiation hatası:', userId, e);
+      }
+    }
+  } finally {
+    addingTrackToPeers = false;
+  }
+}
+
+// Eklenen track'leri tüm peer connections'a yayımla ve karşı tarafa hemen iletilmesi için renegotiation yap
+async function addTrackToPeerConnections(track, stream) {
+  addingTrackToPeers = true;
+  try {
+    Object.entries(peerConnections).forEach(([userId, pc]) => {
+      const sender = pc.getSenders().find(s => s.track?.kind === track.kind);
+      if (sender) sender.replaceTrack(track);
+      else pc.addTrack(track, stream);
+    });
+    // Kamera/mikrofon açıldığında karşıya hemen gitsin — açık renegotiation (bazı ortamlarda onnegotiationneeded gecikmeli tetiklenebilir)
+    for (const [userId, pc] of Object.entries(peerConnections)) {
+      if (pc.signalingState !== 'stable') {
+        // Cevap henüz gelmedi; cevap gelince ensureLocalTracksSent bu peer için offer atacak
+        pendingRenegotiation.add(userId);
+        continue;
+      }
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', { to: userId, offer: pc.localDescription });
+      } catch (e) {
+        console.warn('Yeniden müzakere hatası:', userId, e);
+      }
+    }
+  } finally {
+    addingTrackToPeers = false;
+  }
 }
 
 // İzin modal
@@ -1009,10 +1099,10 @@ permissionRetryBtn.addEventListener('click', () => {
   const promise = type === 'video'
     ? navigator.mediaDevices.getUserMedia({ video: true })
     : navigator.mediaDevices.getUserMedia({ audio: true });
-  promise.then(stream => {
+  promise.then(async (stream) => {
     const track = type === 'video' ? stream.getVideoTracks()[0] : stream.getAudioTracks()[0];
     localStream.addTrack(track);
-    addTrackToPeerConnections(track, localStream);
+    await addTrackToPeerConnections(track, localStream);
     if (type === 'audio') setupAudioLevelDetection('local', localStream);
     updateMediaButtons();
     hidePermissionModal();
@@ -1032,7 +1122,7 @@ async function requestMediaWithRetry(type) {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     const track = type === 'video' ? stream.getVideoTracks()[0] : stream.getAudioTracks()[0];
     localStream.addTrack(track);
-    addTrackToPeerConnections(track, localStream);
+    await addTrackToPeerConnections(track, localStream);
     updateMediaButtons();
     return true;
   } catch (err) {
@@ -1049,10 +1139,10 @@ toggleMuteBtn.addEventListener('click', () => {
   const hasAudio = localStream?.getAudioTracks().length > 0;
   if (!hasAudio) {
     const promise = navigator.mediaDevices.getUserMedia({ audio: true });
-    promise.then(stream => {
+    promise.then(async (stream) => {
       const track = stream.getAudioTracks()[0];
       localStream.addTrack(track);
-      addTrackToPeerConnections(track, localStream);
+      await addTrackToPeerConnections(track, localStream);
       setupAudioLevelDetection('local', localStream);
       updateMediaButtons();
     }).catch(err => {
@@ -1073,11 +1163,12 @@ toggleVideoBtn.addEventListener('click', () => {
   const hasVideo = localStream?.getVideoTracks().length > 0;
   if (!hasVideo) {
     const promise = navigator.mediaDevices.getUserMedia({ video: true });
-    promise.then(stream => {
+    promise.then(async (stream) => {
       const track = stream.getVideoTracks()[0];
       localStream.addTrack(track);
-      addTrackToPeerConnections(track, localStream);
+      await addTrackToPeerConnections(track, localStream);
       updateMediaButtons();
+      updateLocalVideoPlaceholder();
     }).catch(err => {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         pendingPermissionRequest = { type: 'video' };
@@ -1088,6 +1179,16 @@ toggleVideoBtn.addEventListener('click', () => {
   }
   isVideoOff = !isVideoOff;
   localStream.getVideoTracks().forEach(track => { track.enabled = !isVideoOff; });
+  if (isVideoOff && currentRoomId) socket.emit('video-off'); // Diğer kullanıcılarda ikona dönsün
+  if (!isVideoOff && currentRoomId) {
+    socket.emit('video-on'); // Kamera tekrar açıldı, karşı taraf güncellesin (onunmute güvenilir değil)
+    // Yerel videoyu yeniden bağla (bazı tarayıcılar track.enabled=true sonrası güncellemiyor)
+    if (localVideo && localStream) {
+      localVideo.srcObject = null;
+      localVideo.srcObject = localStream;
+      localVideo.play().catch(() => {});
+    }
+  }
   updateMediaButtons();
   updateLocalVideoPlaceholder();
 });

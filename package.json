@@ -5,13 +5,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "start:https": "node -e \"process.env.HTTPS='1';require('./server.js')\"",
+    "cert": "node create-cert.js"
   },
   "keywords": ["webrtc", "video", "conference"],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
+    "selfsigned": "^5.5.0",
     "socket.io": "^4.7.2"
   }
 }
