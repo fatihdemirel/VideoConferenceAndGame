@@ -30,6 +30,7 @@ if (useHttps && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   server = http.createServer(app);
 }
 const io = new Server(server);
+const { getInitialChessState, publicChessState, tryChessMove } = require('./chess');
 
 // Statik dosyalar (ön yüz)
 app.use(express.static(CLIENT_DIR));
@@ -150,6 +151,19 @@ function checkWinner(board) {
   return board.includes(null) ? null : 'draw';
 }
 
+function createGameById(gameId, keepScores = false, prev, forcePlacement = false) {
+  if (gameId === 'battleship') return getInitialBattleshipState(keepScores, prev, forcePlacement);
+  if (gameId === 'chess') return getInitialChessState(keepScores, prev);
+  return getInitialGameState(keepScores, prev);
+}
+
+function emitGameState(roomId) {
+  const game = gameState.get(roomId);
+  if (!game) return;
+  const payload = game.gameId === 'chess' ? publicChessState(game) : { ...game };
+  io.to(roomId).emit('game-state', payload);
+}
+
 io.on('connection', (socket) => {
   console.log('Yeni kullanıcı bağlandı:', socket.id);
 
@@ -172,7 +186,7 @@ io.on('connection', (socket) => {
 
     const game = gameState.get(roomId);
     if (game?.player1 && game?.player2) {
-      socket.emit('game-state', game);
+      socket.emit('game-state', game.gameId === 'chess' ? publicChessState(game) : game);
     }
     if (room.pendingGame) {
       io.to(roomId).emit('game-pending', room.pendingGame);
@@ -195,6 +209,7 @@ io.on('connection', (socket) => {
 
   socket.on('game-select', (gameId) => {
     if (!socket.roomId || !gameId) return;
+    if (!['tictactoe', 'battleship', 'chess'].includes(gameId)) return;
     const room = rooms.get(socket.roomId);
     const game = gameState.get(socket.roomId);
     if (!room || (game?.player1 && game?.player2)) return;
@@ -211,20 +226,13 @@ io.on('connection', (socket) => {
     if (room.pendingGame.player1 === socket.id) return;
     const player1 = room.pendingGame.player1;
     delete room.pendingGame;
-    if (gameId === 'battleship') {
-      gameState.set(socket.roomId, getInitialBattleshipState());
-      const g = gameState.get(socket.roomId);
-      g.player1 = player1;
-      g.player2 = socket.id;
-      g.phase = 'placement';
-    } else {
-      gameState.set(socket.roomId, getInitialGameState());
-      const g = gameState.get(socket.roomId);
-      g.player1 = player1;
-      g.player2 = socket.id;
-    }
+    const g = createGameById(gameId);
+    g.player1 = player1;
+    g.player2 = socket.id;
+    if (gameId === 'battleship') g.phase = 'placement';
+    gameState.set(socket.roomId, g);
     io.to(socket.roomId).emit('game-pending-cleared');
-    io.to(socket.roomId).emit('game-state', gameState.get(socket.roomId));
+    emitGameState(socket.roomId);
   });
 
   socket.on('game-cancel', () => {
@@ -254,6 +262,13 @@ io.on('connection', (socket) => {
     }
 
     io.to(socket.roomId).emit('game-state', { ...game });
+  });
+
+  socket.on('game-chess-move', (data) => {
+    if (!socket.roomId || !data) return;
+    const game = gameState.get(socket.roomId);
+    if (!tryChessMove(game, socket.id, data.from, data.to, data.promo)) return;
+    emitGameState(socket.roomId);
   });
 
   socket.on('game-ships-place', (ships) => {
@@ -317,13 +332,11 @@ io.on('connection', (socket) => {
 
   const resetGameInRoom = (roomId) => {
     const prev = gameState.get(roomId);
-    const g = prev?.gameId === 'battleship'
-      ? getInitialBattleshipState(true, prev, true)
-      : getInitialGameState(true, prev);
+    const g = createGameById(prev?.gameId, true, prev, true);
     g.player1 = prev?.player1 ?? null;
     g.player2 = prev?.player2 ?? null;
     gameState.set(roomId, g);
-    io.to(roomId).emit('game-state', g);
+    emitGameState(roomId);
   };
 
   socket.on('game-reset-request', () => {
@@ -392,11 +405,10 @@ io.on('connection', (socket) => {
         } else {
           const game = gameState.get(socket.roomId);
           if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
-            const fresh = game.gameId === 'battleship' ? getInitialBattleshipState() : getInitialGameState();
-            gameState.set(socket.roomId, fresh);
+            gameState.set(socket.roomId, createGameById(game.gameId));
             delete room.pendingGame;
             io.to(socket.roomId).emit('game-pending-cleared');
-            io.to(socket.roomId).emit('game-state', gameState.get(socket.roomId));
+            emitGameState(socket.roomId);
           } else if (room.pendingGame?.player1 === socket.id) {
             delete room.pendingGame;
             io.to(socket.roomId).emit('game-pending-cleared');
@@ -420,11 +432,10 @@ io.on('connection', (socket) => {
         } else {
           const game = gameState.get(socket.roomId);
           if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
-            const fresh = game.gameId === 'battleship' ? getInitialBattleshipState() : getInitialGameState();
-            gameState.set(socket.roomId, fresh);
+            gameState.set(socket.roomId, createGameById(game.gameId));
             delete room.pendingGame;
             io.to(socket.roomId).emit('game-pending-cleared');
-            io.to(socket.roomId).emit('game-state', gameState.get(socket.roomId));
+            emitGameState(socket.roomId);
           } else if (room.pendingGame?.player1 === socket.id) {
             delete room.pendingGame;
             io.to(socket.roomId).emit('game-pending-cleared');

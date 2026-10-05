@@ -55,6 +55,12 @@ const battlePlacementBoard = document.getElementById('battlePlacementBoard');
 const battlePlacementStatus = document.getElementById('battlePlacementStatus');
 const battlePlacementShip = document.getElementById('battlePlacementShip');
 const battleReadyBtn = document.getElementById('battleReadyBtn');
+const gameActiveChess = document.getElementById('gameActiveChess');
+const chessBoard = document.getElementById('chessBoard');
+const chessScore = document.getElementById('chessScore');
+const chessStatus = document.getElementById('chessStatus');
+const chessResetBtn = document.getElementById('chessResetBtn');
+const chessPromo = document.getElementById('chessPromo');
 const gameResetAcceptBtn = document.getElementById('gameResetAcceptBtn');
 const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
 
@@ -70,13 +76,20 @@ let isScreenSharing = false;
 let pendingGame = null; // { gameId, player1 }
 const audioAnalysers = {}; // participantId -> { context, analyser, source, animationId }
 
-const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı' };
+const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç' };
 const BATTLE_SIZE = 8;
 const BATTLE_SHIPS = [4, 3, 2, 2];
+const CHESS_PIECES = {
+  K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
+  k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'
+};
 
 let battlePlacementShips = [];
 let battlePlacementDir = 'h';
 let battlePlacementShipIndex = 0;
+let chessSelected = null;
+let chessPendingPromo = null;
+let chessState = null;
 
 // STUN sunucuları (NAT traversal için)
 const iceServers = [
@@ -225,8 +238,16 @@ chatInput.addEventListener('keypress', (e) => {
 function showGameView(mode, gameId) {
   gameCatalog?.classList.toggle('hidden', mode !== 'catalog');
   gamePending?.classList.toggle('hidden', mode !== 'pending');
-  gameActive?.classList.toggle('hidden', mode !== 'active' || gameId === 'battleship');
+  gameActive?.classList.toggle('hidden', mode !== 'active' || gameId !== 'tictactoe');
   gameActiveBattleship?.classList.toggle('hidden', mode !== 'active' || gameId !== 'battleship');
+  gameActiveChess?.classList.toggle('hidden', mode !== 'active' || gameId !== 'chess');
+  gamePanel?.classList.toggle('game-panel-chess', mode === 'active' && gameId === 'chess');
+}
+
+function isAnyGameActive() {
+  return !gameActive?.classList.contains('hidden')
+    || !gameActiveBattleship?.classList.contains('hidden')
+    || !gameActiveChess?.classList.contains('hidden');
 }
 
 document.querySelectorAll('.game-catalog-item')?.forEach((btn) => {
@@ -264,7 +285,7 @@ socket.on('game-pending', (data) => {
 
 socket.on('game-pending-cleared', () => {
   pendingGame = null;
-  if (!gameActive?.classList.contains('hidden') || !gameActiveBattleship?.classList.contains('hidden')) return;
+  if (isAnyGameActive()) return;
   showGameView('catalog');
 });
 
@@ -275,6 +296,8 @@ socket.on('game-state', (state) => {
     showGameView('active', gid);
     if (gid === 'battleship') {
       renderBattleshipState(state);
+    } else if (gid === 'chess') {
+      renderChessState(state);
     } else {
       renderGameState(state);
     }
@@ -282,6 +305,7 @@ socket.on('game-state', (state) => {
     showGameView('catalog');
     renderGameState(null);
     renderBattleshipState(null);
+    renderChessState(null);
   }
 });
 
@@ -345,6 +369,10 @@ gameResetBtn?.addEventListener('click', () => {
 });
 
 battleResetBtn?.addEventListener('click', () => {
+  if (currentRoomId) socket.emit('game-reset-request');
+});
+
+chessResetBtn?.addEventListener('click', () => {
   if (currentRoomId) socket.emit('game-reset-request');
 });
 
@@ -517,6 +545,132 @@ battleEnemyBoard?.addEventListener('click', (e) => {
   if (!isNaN(idx) && idx >= 0 && idx < BATTLE_SIZE * BATTLE_SIZE) socket.emit('game-shot', idx);
 });
 
+function chessMySide(state) {
+  if (state?.player1 === socket.id) return 'w';
+  if (state?.player2 === socket.id) return 'b';
+  return null;
+}
+
+function renderChessState(state) {
+  chessState = state;
+  chessPendingPromo = null;
+  chessPromo?.classList.add('hidden');
+  if (!chessBoard || !chessStatus) return;
+  if (!state?.player1 || !state?.player2 || !state.board) {
+    chessSelected = null;
+    chessBoard.innerHTML = '';
+    return;
+  }
+
+  const side = chessMySide(state);
+  const flip = side === 'b';
+  const myTurn = !state.winner && side && state.currentTurn === side;
+  const legal = state.legalMoves || [];
+  const fromMoves = chessSelected == null ? [] : legal.filter(m => m.from === chessSelected);
+  const last = state.lastMove;
+
+  if (chessScore) {
+    chessScore.textContent = `Beyaz: ${state.score1 || 0} — Siyah: ${state.score2 || 0}`;
+  }
+
+  let status = 'Bekleniyor...';
+  if (state.winner === 'draw') status = 'Berabere!';
+  else if (state.winner === 'w' || state.winner === 'b') {
+    const iWon = (state.winner === 'w' && side === 'w') || (state.winner === 'b' && side === 'b');
+    const mate = state.inCheck;
+    if (mate) status = iWon ? 'Şah mat! Kazandın!' : 'Şah mat! Kaybettin!';
+    else status = iWon ? 'Kazandın!' : 'Kaybettin!';
+  } else if (side) {
+    const checkText = state.inCheck ? ' Şah!' : '';
+    status = (myTurn ? 'Senin sıran!' : 'Rakibin sırası') + checkText;
+  } else {
+    status = state.currentTurn === 'w' ? 'Beyaz sırası' : 'Siyah sırası';
+  }
+  chessStatus.textContent = status;
+
+  chessBoard.innerHTML = '';
+  for (let display = 0; display < 64; display++) {
+    const sq = flip ? 63 - display : display;
+    const piece = state.board[sq];
+    const f = sq % 8;
+    const r = Math.floor(sq / 8);
+    const light = (f + r) % 2 === 1;
+    const el = document.createElement('div');
+    el.className = 'chess-square ' + (light ? 'light' : 'dark');
+    el.dataset.index = String(sq);
+    if (last && (last.from === sq || last.to === sq)) el.classList.add('last-move');
+    if (state.inCheck && piece && piece.toUpperCase() === 'K' && ((piece === 'K' && state.currentTurn === 'w') || (piece === 'k' && state.currentTurn === 'b'))) {
+      el.classList.add('check');
+    }
+    if (chessSelected === sq) el.classList.add('selected');
+    const canSelect = myTurn && piece && ((side === 'w' && piece === piece.toUpperCase()) || (side === 'b' && piece === piece.toLowerCase()));
+    if (canSelect) el.classList.add('selectable');
+    const isTarget = fromMoves.some(m => m.to === sq);
+    if (isTarget) {
+      el.classList.add('legal');
+      if (piece) el.classList.add('has-piece');
+    }
+    if (piece) {
+      const span = document.createElement('span');
+      span.className = 'chess-piece ' + (piece === piece.toUpperCase() ? 'white' : 'black');
+      span.textContent = CHESS_PIECES[piece] || piece;
+      el.appendChild(span);
+    }
+    chessBoard.appendChild(el);
+  }
+}
+
+chessBoard?.addEventListener('click', (e) => {
+  const square = e.target.closest('.chess-square');
+  if (!square || !currentRoomId || !chessState) return;
+  const sq = parseInt(square.dataset.index, 10);
+  if (isNaN(sq)) return;
+  const side = chessMySide(chessState);
+  if (!side || chessState.winner || chessState.currentTurn !== side) return;
+
+  const legal = chessState.legalMoves || [];
+  if (chessSelected != null) {
+    const matches = legal.filter(m => m.from === chessSelected && m.to === sq);
+    if (matches.length) {
+      if (matches.some(m => m.promo)) {
+        chessPendingPromo = { from: chessSelected, to: sq };
+        chessPromo?.classList.remove('hidden');
+        return;
+      }
+      socket.emit('game-chess-move', { from: chessSelected, to: sq });
+      chessSelected = null;
+      chessPendingPromo = null;
+      chessPromo?.classList.add('hidden');
+      return;
+    }
+  }
+
+  chessPendingPromo = null;
+  chessPromo?.classList.add('hidden');
+  const piece = chessState.board[sq];
+  const mine = piece && ((side === 'w' && piece === piece.toUpperCase()) || (side === 'b' && piece === piece.toLowerCase()));
+  if (mine && legal.some(m => m.from === sq)) {
+    chessSelected = chessSelected === sq ? null : sq;
+    renderChessState(chessState);
+  } else {
+    chessSelected = null;
+    renderChessState(chessState);
+  }
+});
+
+chessPromo?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.chess-promo-btn');
+  if (!btn || !chessPendingPromo || !currentRoomId) return;
+  socket.emit('game-chess-move', {
+    from: chessPendingPromo.from,
+    to: chessPendingPromo.to,
+    promo: btn.dataset.promo
+  });
+  chessSelected = null;
+  chessPendingPromo = null;
+  chessPromo?.classList.add('hidden');
+});
+
 gameResetAcceptBtn?.addEventListener('click', () => {
   socket.emit('game-reset-accept');
   gameResetModal?.classList.add('hidden');
@@ -532,12 +686,16 @@ socket.on('game-reset-request', () => {
 });
 
 socket.on('game-reset-rejected', () => {
-  const statusEl = gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus;
+  const statusEl = !gameActiveChess?.classList.contains('hidden')
+    ? chessStatus
+    : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
   if (statusEl) statusEl.textContent = 'Rakip reddetti.';
 });
 
 socket.on('game-reset-accepted', () => {
-  const statusEl = gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus;
+  const statusEl = !gameActiveChess?.classList.contains('hidden')
+    ? chessStatus
+    : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
   if (statusEl) statusEl.textContent = 'Rakip kabul etti!';
 });
 
@@ -977,9 +1135,13 @@ function leaveRoom() {
   gamePanel?.classList.add('game-panel-collapsed');
   gamePanelOverlay?.classList.add('hidden');
   pendingGame = null;
+  chessSelected = null;
+  chessPendingPromo = null;
+  chessState = null;
   showGameView('catalog');
   renderGameState(null);
   renderBattleshipState(null);
+  renderChessState(null);
 
   if (currentRoomId) {
     socket.emit('leave-room');
