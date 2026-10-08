@@ -550,39 +550,34 @@ body {
   background: var(--bg-elevated);
 }
 
-/* Chess Board Animations */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
+/* Chess Board - Piece Movement Animations */
+@keyframes pieceMoveScale {
+  0% {
+    transform: scale(1);
   }
-  to {
-    opacity: 1;
+  50% {
+    transform: scale(1.15) translateY(-8px);
+  }
+  100% {
     transform: scale(1);
   }
 }
 
-@keyframes movePiece {
-  0% {
-    transform: translate(0, 0);
+@keyframes squareGlow {
+  0%, 100% {
+    box-shadow: inset 0 0 0 0 rgba(255, 140, 0, 0.3);
   }
   50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: translate(0, 0);
+    box-shadow: inset 0 0 0 3px rgba(255, 140, 0, 0.6);
   }
 }
 
-@keyframes highlight {
-  0% {
-    box-shadow: inset 0 0 0 0 rgba(255, 140, 0, 0.5);
+@keyframes legalMoveGlow {
+  0%, 100% {
+    background: rgba(255, 140, 0, 0.2);
   }
   50% {
-    box-shadow: inset 0 0 0 3px rgba(255, 140, 0, 0.8);
-  }
-  100% {
-    box-shadow: inset 0 0 0 0 rgba(255, 140, 0, 0.5);
+    background: rgba(255, 140, 0, 0.4);
   }
 }
 
@@ -631,16 +626,15 @@ body {
 
 .chess-square.selected {
   box-shadow: inset 0 0 0 3px #FF8C00;
-  animation: highlight 0.6s ease-in-out infinite;
 }
 
 .chess-square.last-move {
-  animation: slideIn 0.3s ease-out;
+  box-shadow: inset 0 0 0 2px rgba(255, 140, 0, 0.5);
 }
 
 .chess-square.check {
   background: #c53030;
-  animation: highlight 0.6s ease-in-out infinite;
+  box-shadow: inset 0 0 0 2px #ff6b6b;
 }
 
 .chess-square.legal {
@@ -658,7 +652,7 @@ body {
   border-radius: 50%;
   background: rgba(255, 140, 0, 0.4);
   pointer-events: none;
-  animation: slideIn 0.3s ease-out;
+  animation: legalMoveGlow 1.2s ease-in-out infinite;
 }
 
 .chess-square.legal.has-piece::after {
@@ -666,6 +660,7 @@ body {
   height: 78%;
   background: transparent;
   border: 2px solid #FF8C00;
+  animation: legalMoveGlow 1.2s ease-in-out infinite;
 }
 
 .chess-square.selectable {
@@ -673,7 +668,10 @@ body {
 }
 
 .chess-piece {
-  animation: slideIn 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .chess-piece.white {
@@ -684,6 +682,11 @@ body {
 .chess-piece.black {
   color: #1a1a1a;
   text-shadow: 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
+/* Piece movement animation - applies during moves */
+.chess-square:not(.last-move) .chess-piece {
+  animation: pieceMoveScale 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .chess-promo {
@@ -701,7 +704,7 @@ body {
   padding: 8px 12px;
   font-size: 0.9rem;
   background: #6B4423;
-  border: 1px solid #D4A574;
+  border: 2px solid #D4A574;
   border-radius: 8px;
   color: #D4A574;
   cursor: pointer;
@@ -714,6 +717,7 @@ body {
   background: #8B5A3C;
   color: #FF8C00;
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
 }
 
 /* Oyun paneli overlay – dar ekranda */
@@ -1121,7 +1125,7 @@ body {
   color: var(--text-muted);
 }
 
-.status-bar span.connected {
+#connectionStatus.connected {
   color: #00ba7c;
 }
 
@@ -1136,7 +1140,6 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: slideIn 0.3s ease-out;
 }
 
 .permission-modal.hidden {
