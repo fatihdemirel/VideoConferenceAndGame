@@ -16,6 +16,8 @@ const emptyTables = document.getElementById('emptyTables');
 const tableLobbyError = document.getElementById('tableLobbyError');
 const lobbyError = document.getElementById('lobbyError');
 const newTableGame = document.getElementById('newTableGame');
+const newTableWordLength = document.getElementById('newTableWordLength');
+const newTableWordLengthLabel = document.getElementById('newTableWordLengthLabel');
 const createTableBtn = document.getElementById('createTableBtn');
 const lobbyUserName = document.getElementById('lobbyUserName');
 const localDisplayName = document.getElementById('localDisplayName');
@@ -74,6 +76,16 @@ const chessScore = document.getElementById('chessScore');
 const chessStatus = document.getElementById('chessStatus');
 const chessResetBtn = document.getElementById('chessResetBtn');
 const chessPromo = document.getElementById('chessPromo');
+const gameActiveLingo = document.getElementById('gameActiveLingo');
+const lingoBoard = document.getElementById('lingoBoard');
+const lingoStatus = document.getElementById('lingoStatus');
+const lingoScore = document.getElementById('lingoScore');
+const lingoTimer = document.getElementById('lingoTimer');
+const lingoKeyboard = document.getElementById('lingoKeyboard');
+const lingoGuessBtn = document.getElementById('lingoGuessBtn');
+const lingoResetBtn = document.getElementById('lingoResetBtn');
+const catalogLingoWordLength = document.getElementById('catalogLingoWordLength');
+const createLingoGameBtn = document.getElementById('createLingoGameBtn');
 const gameResetAcceptBtn = document.getElementById('gameResetAcceptBtn');
 const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
 
@@ -91,7 +103,7 @@ let isScreenSharing = false;
 let pendingGame = null; // { gameId, player1 }
 const audioAnalysers = {}; // participantId -> { context, analyser, source, animationId }
 
-const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç' };
+const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç', lingo: 'Lingo' };
 const BATTLE_SIZE = 8;
 const BATTLE_SHIPS = [4, 3, 2, 2];
 const CHESS_PIECE_SHAPES = {
@@ -109,6 +121,16 @@ let battlePlacementShipIndex = 0;
 let chessSelected = null;
 let chessPendingPromo = null;
 let chessState = null;
+let lingoState = null;
+let lingoTimerInterval = null;
+let lingoDraft = [];
+let lingoRenderedGuessCount = 0;
+let lingoRenderedTurn = null;
+const LINGO_KEY_ROWS = [
+  [...'QWERTYUIOPĞÜ'],
+  [...'ASDFGHJKLŞİ'],
+  [...'ZXCVBNMÖÇ']
+];
 
 // STUN sunucuları (NAT traversal için)
 const iceServers = [
@@ -183,11 +205,12 @@ function renderTableList(tables) {
   tableList.replaceChildren();
   tableCount.textContent = `${tables.length} masa`;
   emptyTables.classList.toggle('hidden', tables.length > 0);
-  const icons = { chess: '♞', tictactoe: '✕', battleship: '⚓' };
+  const icons = { chess: '♞', tictactoe: '✕', battleship: '⚓', lingo: '🔤' };
   const descriptions = {
     chess: 'Strateji · 2 oyuncu',
     tictactoe: 'Hızlı oyun · 2 oyuncu',
-    battleship: 'Filo savaşı · 2 oyuncu'
+    battleship: 'Filo savaşı · 2 oyuncu',
+    lingo: 'Kelime tahmini · 2 oyuncu'
   };
 
   tables.forEach((table) => {
@@ -209,7 +232,10 @@ function renderTableList(tables) {
       : `${table.hostName} masayı açtı`;
     const meta = document.createElement('span');
     meta.className = 'table-card-meta';
-    meta.textContent = `${descriptions[table.gameId] || '2 oyuncu'} · ${table.status === 'playing' ? 'Oyun sürüyor' : 'Rakip bekleniyor'}`;
+    const description = table.gameId === 'lingo'
+      ? `Kelime tahmini · ${table.wordLength || 5} harf · 2 oyuncu`
+      : descriptions[table.gameId] || '2 oyuncu';
+    meta.textContent = `${description} · ${table.status === 'playing' ? 'Oyun sürüyor' : 'Rakip bekleniyor'}`;
     details.append(title, host, meta);
 
     const action = document.createElement('button');
@@ -238,7 +264,16 @@ createTableBtn?.addEventListener('click', () => {
   if (!currentUserName) return;
   tableLobbyError.classList.add('hidden');
   createTableBtn.disabled = true;
-  socket.emit('table-create', newTableGame.value);
+  socket.emit('table-create', {
+    gameId: newTableGame.value,
+    wordLength: Number(newTableWordLength?.value || 5)
+  });
+});
+
+newTableGame?.addEventListener('change', () => {
+  const isLingo = newTableGame.value === 'lingo';
+  newTableWordLength?.classList.toggle('hidden', !isLingo);
+  newTableWordLengthLabel?.classList.toggle('hidden', !isLingo);
 });
 
 socket.on('table-error', (message) => {
@@ -358,13 +393,15 @@ function showGameView(mode, gameId) {
   gameActive?.classList.toggle('hidden', mode !== 'active' || gameId !== 'tictactoe');
   gameActiveBattleship?.classList.toggle('hidden', mode !== 'active' || gameId !== 'battleship');
   gameActiveChess?.classList.toggle('hidden', mode !== 'active' || gameId !== 'chess');
+  gameActiveLingo?.classList.toggle('hidden', mode !== 'active' || gameId !== 'lingo');
   gamePanel?.classList.toggle('game-panel-chess', mode === 'active' && gameId === 'chess');
 }
 
 function isAnyGameActive() {
   return !gameActive?.classList.contains('hidden')
     || !gameActiveBattleship?.classList.contains('hidden')
-    || !gameActiveChess?.classList.contains('hidden');
+    || !gameActiveChess?.classList.contains('hidden')
+    || !gameActiveLingo?.classList.contains('hidden');
 }
 
 document.querySelectorAll('.game-catalog-item')?.forEach((btn) => {
@@ -372,6 +409,14 @@ document.querySelectorAll('.game-catalog-item')?.forEach((btn) => {
     if (!currentRoomId) return;
     const gameId = btn.dataset.game;
     if (gameId) socket.emit('game-select', gameId);
+  });
+});
+
+createLingoGameBtn?.addEventListener('click', () => {
+  if (!currentRoomId) return;
+  socket.emit('game-select', {
+    gameId: 'lingo',
+    wordLength: Number(catalogLingoWordLength?.value || 5)
   });
 });
 
@@ -415,6 +460,8 @@ socket.on('game-state', (state) => {
       renderBattleshipState(state);
     } else if (gid === 'chess') {
       renderChessState(state);
+    } else if (gid === 'lingo') {
+      renderLingoState(state);
     } else {
       renderGameState(state);
     }
@@ -423,8 +470,184 @@ socket.on('game-state', (state) => {
     renderGameState(null);
     renderBattleshipState(null);
     renderChessState(null);
+    renderLingoState(null);
   }
 });
+
+function updateLingoTimer() {
+  if (!lingoTimer || !lingoState?.turnDeadline || lingoState.winner) {
+    if (lingoTimer) lingoTimer.textContent = '—';
+    lingoTimer?.classList.remove('is-low');
+    return;
+  }
+  const seconds = Math.max(0, Math.ceil((lingoState.turnDeadline - Date.now()) / 1000));
+  lingoTimer.textContent = `${seconds} sn`;
+  lingoTimer.classList.toggle('is-low', seconds <= 3);
+}
+
+function renderLingoState(state) {
+  const previousState = lingoState;
+  lingoState = state;
+  if (lingoTimerInterval) {
+    clearInterval(lingoTimerInterval);
+    lingoTimerInterval = null;
+  }
+  if (!lingoBoard || !lingoStatus) return;
+  if (!state?.player1 || !state?.player2) {
+    lingoBoard.replaceChildren();
+    lingoStatus.textContent = 'İkinci oyuncu bekleniyor...';
+    lingoDraft = [];
+    lingoGuessBtn.disabled = true;
+    renderLingoKeyboard(new Map());
+    updateLingoTimer();
+    return;
+  }
+
+  const wordLength = state.wordLength;
+  const myPlayer = state.player1 === socket.id ? 'player1' : state.player2 === socket.id ? 'player2' : null;
+  const isMyTurn = !state.winner && myPlayer === state.currentTurn;
+  const guesses = Array.isArray(state.guesses) ? state.guesses : [];
+  if (!previousState || previousState.player1 !== state.player1 ||
+      guesses.length !== lingoRenderedGuessCount || state.currentTurn !== lingoRenderedTurn) {
+    lingoDraft = [];
+  }
+  lingoRenderedGuessCount = guesses.length;
+  lingoRenderedTurn = state.currentTurn;
+
+  const knownLetters = Array(wordLength).fill('');
+  const keyboardStatus = new Map();
+  const statusPriority = { absent: 1, present: 2, correct: 3 };
+  guesses.forEach((entry) => {
+    [...(entry.guess || '')].forEach((letter, index) => {
+      const result = entry.feedback?.[index];
+      if (result === 'correct') knownLetters[index] = letter;
+      if (result && (statusPriority[result] || 0) > (statusPriority[keyboardStatus.get(letter)] || 0)) {
+        keyboardStatus.set(letter, result);
+      }
+    });
+  });
+
+  const rows = document.createDocumentFragment();
+
+  for (let rowIndex = 0; rowIndex < 6; rowIndex++) {
+    const entry = guesses[rowIndex];
+    const row = document.createElement('div');
+    row.className = 'lingo-row';
+    row.style.setProperty('--lingo-length', String(wordLength));
+    if (entry?.timedOut) {
+      row.classList.add('timed-out');
+      row.setAttribute('aria-label', 'Süre doldu');
+    }
+    const letters = [...(entry?.guess || '')];
+    const isCurrentRow = !entry && rowIndex === guesses.length && isMyTurn;
+    for (let column = 0; column < wordLength; column++) {
+      const tile = document.createElement('span');
+      tile.className = 'lingo-tile';
+      const letter = letters[column] || (isCurrentRow ? (knownLetters[column] || lingoDraft[column] || '') : '');
+      tile.textContent = letter;
+      const result = entry?.feedback?.[column];
+      if (result) tile.classList.add(result);
+      else if (isCurrentRow && knownLetters[column]) tile.classList.add('correct', 'lingo-locked');
+      row.appendChild(tile);
+    }
+    rows.appendChild(row);
+  }
+  lingoBoard.replaceChildren(rows);
+
+  if (state.winner === 'draw') {
+    lingoStatus.textContent = `Berabere! Kelime: ${state.answer}`;
+  } else if (state.winner) {
+    lingoStatus.textContent = state.winner === myPlayer ? 'Doğru bildin, kazandın!' : 'Rakibin bildi!';
+  } else if (myPlayer) {
+    lingoStatus.textContent = isMyTurn ? 'Senin sıran!' : `${getParticipantDisplayName(state.currentTurn === 'player1' ? state.player1 : state.player2)} tahmin ediyor`;
+  } else {
+    lingoStatus.textContent = `${getParticipantDisplayName(state.currentTurn === 'player1' ? state.player1 : state.player2)} tahmin ediyor`;
+  }
+  if (state.winner && state.winner !== 'draw') {
+    lingoStatus.textContent += ` Kelime: ${state.answer}`;
+  }
+  if (lingoScore) {
+    lingoScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
+  }
+  lingoGuessBtn.disabled = !isMyTurn;
+  if (lingoKeyboard) lingoKeyboard.setAttribute('aria-disabled', String(!isMyTurn));
+  renderLingoKeyboard(keyboardStatus, isMyTurn);
+  updateLingoTimer();
+  if (!state.winner) lingoTimerInterval = setInterval(updateLingoTimer, 250);
+}
+
+function renderLingoKeyboard(keyboardStatus, isMyTurn = false) {
+  if (!lingoKeyboard) return;
+  const fragment = document.createDocumentFragment();
+  LINGO_KEY_ROWS.forEach((letters, rowIndex) => {
+    const row = document.createElement('div');
+    row.className = `lingo-key-row row-${rowIndex + 1}`;
+    letters.forEach((letter) => {
+      const key = document.createElement('button');
+      key.type = 'button';
+      key.className = 'lingo-key';
+      key.textContent = letter;
+      key.dataset.letter = letter;
+      const status = keyboardStatus.get(letter);
+      if (status) key.classList.add(`used-${status}`);
+      key.disabled = !isMyTurn;
+      row.appendChild(key);
+    });
+    if (rowIndex === 2) {
+      const backspace = document.createElement('button');
+      backspace.type = 'button';
+      backspace.className = 'lingo-key lingo-key-action';
+      backspace.textContent = '⌫';
+      backspace.setAttribute('aria-label', 'Son harfi sil');
+      backspace.dataset.action = 'backspace';
+      backspace.disabled = !isMyTurn;
+      row.appendChild(backspace);
+    }
+    fragment.appendChild(row);
+  });
+  lingoKeyboard.replaceChildren(fragment);
+}
+
+lingoKeyboard?.addEventListener('click', (event) => {
+  const key = event.target.closest('.lingo-key');
+  if (!key || key.disabled || !lingoState) return;
+  if (key.dataset.action === 'backspace') {
+    for (let index = lingoDraft.length - 1; index >= 0; index--) {
+      if (!getLingoKnownLetters()[index] && lingoDraft[index]) {
+        lingoDraft[index] = '';
+        break;
+      }
+    }
+  } else {
+    const knownLetters = getLingoKnownLetters();
+    const nextIndex = knownLetters.findIndex((letter, index) => !letter && !lingoDraft[index]);
+    if (nextIndex !== -1) lingoDraft[nextIndex] = key.dataset.letter;
+  }
+  renderLingoState(lingoState);
+});
+
+function getLingoKnownLetters() {
+  const knownLetters = Array(lingoState?.wordLength || 0).fill('');
+  (lingoState?.guesses || []).forEach((entry) => {
+    [...(entry.guess || '')].forEach((letter, index) => {
+      if (entry.feedback?.[index] === 'correct') knownLetters[index] = letter;
+    });
+  });
+  return knownLetters;
+}
+
+function submitLingoGuess() {
+  if (!currentRoomId || lingoGuessBtn.disabled || !lingoState) return;
+  const knownLetters = getLingoKnownLetters();
+  const guess = Array.from({ length: lingoState.wordLength }, (_, index) => knownLetters[index] || lingoDraft[index] || '').join('');
+  if ([...guess].length !== lingoState.wordLength) {
+    lingoStatus.textContent = `Tahmin için ${lingoState.wordLength} harfi tamamla.`;
+    return;
+  }
+  socket.emit('game-lingo-guess', guess);
+}
+
+lingoGuessBtn?.addEventListener('click', submitLingoGuess);
 
 // TicTacToe
 function getWinningLine(board) {
@@ -490,6 +713,10 @@ battleResetBtn?.addEventListener('click', () => {
 });
 
 chessResetBtn?.addEventListener('click', () => {
+  if (currentRoomId) socket.emit('game-reset-request');
+});
+
+lingoResetBtn?.addEventListener('click', () => {
   if (currentRoomId) socket.emit('game-reset-request');
 });
 
@@ -1333,6 +1560,7 @@ function leaveRoom() {
   chessSelected = null;
   chessPendingPromo = null;
   chessState = null;
+  renderLingoState(null);
   showGameView('catalog');
   renderGameState(null);
   renderBattleshipState(null);

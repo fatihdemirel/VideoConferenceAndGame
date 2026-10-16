@@ -49,6 +49,13 @@
               <option value="chess">Satranç</option>
               <option value="tictactoe">XOX</option>
               <option value="battleship">Amiral Battı</option>
+              <option value="lingo">Lingo</option>
+            </select>
+            <label id="newTableWordLengthLabel" class="visually-hidden hidden" for="newTableWordLength">Lingo kelime uzunluğu</label>
+            <select id="newTableWordLength" class="hidden" aria-label="Lingo kelime uzunluğu">
+              <option value="4">4 harf</option>
+              <option value="5" selected>5 harf</option>
+              <option value="6">6 harf</option>
             </select>
             <button id="createTableBtn" class="btn btn-primary" type="button">＋ Masa aç</button>
           </div>
@@ -117,6 +124,15 @@
               <button class="game-catalog-item" data-game="tictactoe">XOX</button>
               <button class="game-catalog-item" data-game="battleship">Amiral Battı</button>
               <button class="game-catalog-item" data-game="chess">Satranç</button>
+            </div>
+            <div class="lingo-catalog-options">
+              <label for="catalogLingoWordLength">Lingo kelime uzunluğu</label>
+              <select id="catalogLingoWordLength">
+                <option value="4">4 harf</option>
+                <option value="5" selected>5 harf</option>
+                <option value="6">6 harf</option>
+              </select>
+              <button id="createLingoGameBtn" class="game-catalog-item" type="button">Lingo masası aç</button>
             </div>
           </div>
           <!-- Bekleme / Katıl -->
@@ -189,6 +205,20 @@
               <button type="button" class="chess-promo-btn" data-promo="N">At</button>
             </div>
             <button id="chessResetBtn" class="btn btn-icon game-reset-btn">Yeniden Başla</button>
+          </div>
+          <!-- Aktif oyun: Lingo -->
+          <div id="gameActiveLingo" class="game-active game-lingo hidden">
+            <div class="game-header">
+              <h3>Lingo</h3>
+              <div id="lingoScore" class="game-score">0 — 0</div>
+              <span id="lingoStatus" class="game-status">Bekleniyor...</span>
+              <span id="lingoTimer" class="lingo-timer" aria-live="off">30 sn</span>
+            </div>
+            <div id="lingoBoard" class="lingo-board" aria-label="Tahminler"></div>
+            <div id="lingoKeyboard" class="lingo-keyboard" aria-label="Harf klavyesi"></div>
+            <button id="lingoGuessBtn" class="btn btn-primary lingo-submit" type="button">Tahmin et</button>
+            <p class="lingo-hint">Yeşil: doğru harf ve yer · Sarı: kelimede var</p>
+            <button id="lingoResetBtn" class="btn btn-icon game-reset-btn">Yeniden Başla</button>
           </div>
         </div>
         <aside class="connections-rail" aria-label="Bağlantılar">
