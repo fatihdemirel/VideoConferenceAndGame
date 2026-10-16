@@ -6,10 +6,23 @@ const socket = io();
 
 // DOM elementleri
 const lobby = document.getElementById('lobby');
+const tableLobby = document.getElementById('tableLobby');
 const conference = document.getElementById('conference');
-const roomIdInput = document.getElementById('roomId');
+const displayNameInput = document.getElementById('displayNameInput');
 const joinBtn = document.getElementById('joinBtn');
+const tableList = document.getElementById('tableList');
+const tableCount = document.getElementById('tableCount');
+const emptyTables = document.getElementById('emptyTables');
+const tableLobbyError = document.getElementById('tableLobbyError');
+const lobbyError = document.getElementById('lobbyError');
+const newTableGame = document.getElementById('newTableGame');
+const createTableBtn = document.getElementById('createTableBtn');
+const lobbyUserName = document.getElementById('lobbyUserName');
+const localDisplayName = document.getElementById('localDisplayName');
+const localVideoLabel = document.getElementById('localVideoLabel');
+const localInitial = document.getElementById('localInitial');
 const roomTitle = document.getElementById('roomTitle');
+const tableGameLabel = document.getElementById('tableGameLabel');
 const localVideo = document.getElementById('localVideo');
 const remoteVideos = document.getElementById('remoteVideos');
 const connectionStatus = document.getElementById('connectionStatus');
@@ -70,6 +83,8 @@ let peerConnections = {};
 let iceCandidateQueue = {}; // userId -> [candidates] (remote description gelmeden önce buffer)
 const remoteStreams = {};   // userId -> MediaStream (uzak kullanıcının tüm track'leri tek stream'de; sadece kamera gelse de görünsün)
 let currentRoomId = null;
+let currentUserName = '';
+const participantNames = {};
 let isMuted = false;
 let isVideoOff = false;
 let isScreenSharing = false;
@@ -79,9 +94,13 @@ const audioAnalysers = {}; // participantId -> { context, analyser, source, anim
 const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç' };
 const BATTLE_SIZE = 8;
 const BATTLE_SHIPS = [4, 3, 2, 2];
-const CHESS_PIECES = {
-  K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
-  k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'
+const CHESS_PIECE_SHAPES = {
+  K: 'M28 5h8v7h7v7h-7v6c8 2 13 9 13 17v5H15v-5c0-8 5-15 13-17v-6h-7v-7h7z',
+  Q: 'M12 18l8 7 7-5 5-13 5 13 7 5 8-7-5 22c-1 5-4 8-9 8h-12c-5 0-8-3-9-8z',
+  R: 'M13 10h9v9h5v-9h10v9h5v-9h9v17l-5 4v14H18V31l-5-4z',
+  B: 'M32 6c-3 5-13 14-13 24 0 7 4 11 10 13l-2 6h10l-2-6c6-2 10-6 10-13C45 20 35 11 32 6z',
+  N: 'M17 50c1-7 3-12 7-17l-6-8 8-2 3-10 8-7 2 9 8 3 7 10-5 5 4 17z',
+  P: 'M32 7a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-6 22c-1 4-2 8-4 11l-6 5v5h32v-5l-6-5c-2-3-3-7-4-11z'
 };
 
 let battlePlacementShips = [];
@@ -97,43 +116,141 @@ const iceServers = [
   { urls: 'stun:stun1.l.google.com:19302' }
 ];
 
-// Rastgele oda ID oluştur
-function generateRoomId() {
-  return 'room-' + Math.random().toString(36).substring(2, 10);
-}
-
-// URL'den oda ID yükle veya yeni oluştur
-const urlParams = new URLSearchParams(window.location.search);
-roomIdInput.value = urlParams.get('room') || generateRoomId();
-
-// Odaya katıl (kamera/mikrofon izni zorunlu değil)
-joinBtn.addEventListener('click', async () => {
-  const roomId = roomIdInput.value.trim() || generateRoomId();
-  roomIdInput.value = roomId;
-
+function enterTableRoom({ roomId, gameId }) {
   localStream = new MediaStream();
   localVideo.srcObject = localStream;
+  participantNames[socket.id] = currentUserName;
   updateLocalVideoPlaceholder();
   currentRoomId = roomId;
-  socket.emit('join-room', roomId);
-
+  const gameName = GAME_NAMES[gameId] || 'Oyun';
   lobby.classList.add('hidden');
+  tableLobby.classList.add('hidden');
   conference.classList.remove('hidden');
-  roomTitle.textContent = `Oda: ${roomId}`;
+  roomTitle.textContent = `${gameName} masası`;
+  tableGameLabel.textContent = gameName;
   connectionStatus.textContent = 'Bağlanıyor...';
   connectionStatus.classList.remove('connected');
-
-  history.replaceState({}, '', getConferenceUrl(roomId));
+  gamePanel?.classList.remove('game-panel-collapsed');
+  gamePanelOverlay?.classList.add('hidden');
+  showGameView('pending');
+  history.replaceState({}, '', window.location.pathname);
   updateMediaButtons();
   pendingGame = null;
-  showGameView('catalog');
+}
+
+joinBtn.addEventListener('click', () => {
+  const name = displayNameInput.value.trim().slice(0, 24);
+  if (!name) {
+    lobbyError.textContent = 'Lütfen masalarda görünecek bir isim yaz.';
+    lobbyError.classList.remove('hidden');
+    displayNameInput.focus();
+    return;
+  }
+  lobbyError.classList.add('hidden');
+  joinBtn.disabled = true;
+  socket.emit('lobby-join', name);
 });
 
-function getConferenceUrl(roomId) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('room', roomId);
-  return url.toString();
+displayNameInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') joinBtn.click();
+});
+
+document.getElementById('changeNameBtn')?.addEventListener('click', () => {
+  tableLobby.classList.add('hidden');
+  lobby.classList.remove('hidden');
+  displayNameInput.value = currentUserName;
+});
+
+socket.on('lobby-ready', ({ name }) => {
+  currentUserName = name;
+  lobbyUserName.textContent = name;
+  if (localDisplayName) localDisplayName.textContent = name;
+  if (localVideoLabel) localVideoLabel.textContent = name;
+  if (localInitial) localInitial.textContent = name.charAt(0).toUpperCase();
+  lobby.classList.add('hidden');
+  tableLobby.classList.remove('hidden');
+  joinBtn.disabled = false;
+});
+
+socket.on('lobby-error', (message) => {
+  lobbyError.textContent = message;
+  lobbyError.classList.remove('hidden');
+  joinBtn.disabled = false;
+});
+
+function renderTableList(tables) {
+  if (!tableList || !Array.isArray(tables)) return;
+  tableList.replaceChildren();
+  tableCount.textContent = `${tables.length} masa`;
+  emptyTables.classList.toggle('hidden', tables.length > 0);
+  const icons = { chess: '♞', tictactoe: '✕', battleship: '⚓' };
+  const descriptions = {
+    chess: 'Strateji · 2 oyuncu',
+    tictactoe: 'Hızlı oyun · 2 oyuncu',
+    battleship: 'Filo savaşı · 2 oyuncu'
+  };
+
+  tables.forEach((table) => {
+    const card = document.createElement('article');
+    card.className = 'table-card';
+
+    const gameIcon = document.createElement('span');
+    gameIcon.className = `table-card-icon ${table.gameId}`;
+    gameIcon.textContent = icons[table.gameId] || '♟';
+    gameIcon.setAttribute('aria-hidden', 'true');
+
+    const details = document.createElement('div');
+    details.className = 'table-card-details';
+    const title = document.createElement('h3');
+    title.textContent = GAME_NAMES[table.gameId] || 'Oyun';
+    const host = document.createElement('p');
+    host.textContent = table.opponentName
+      ? `${table.hostName} · ${table.opponentName}`
+      : `${table.hostName} masayı açtı`;
+    const meta = document.createElement('span');
+    meta.className = 'table-card-meta';
+    meta.textContent = `${descriptions[table.gameId] || '2 oyuncu'} · ${table.status === 'playing' ? 'Oyun sürüyor' : 'Rakip bekleniyor'}`;
+    details.append(title, host, meta);
+
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'btn btn-primary table-join-btn';
+    action.textContent = table.status === 'playing' ? 'Oyun sürüyor' : 'Masaya katıl';
+    action.disabled = table.status === 'playing';
+    if (table.status !== 'playing') {
+      action.addEventListener('click', () => {
+        tableLobbyError.classList.add('hidden');
+        socket.emit('table-join', table.roomId);
+      });
+    }
+
+    const seats = document.createElement('span');
+    seats.className = 'table-seats';
+    seats.textContent = `${table.playerCount} / 2`;
+    card.append(gameIcon, details, seats, action);
+    tableList.appendChild(card);
+  });
 }
+
+socket.on('table-list', renderTableList);
+
+createTableBtn?.addEventListener('click', () => {
+  if (!currentUserName) return;
+  tableLobbyError.classList.add('hidden');
+  createTableBtn.disabled = true;
+  socket.emit('table-create', newTableGame.value);
+});
+
+socket.on('table-error', (message) => {
+  tableLobbyError.textContent = message;
+  tableLobbyError.classList.remove('hidden');
+  createTableBtn.disabled = false;
+});
+
+socket.on('table-joined', (data) => {
+  createTableBtn.disabled = false;
+  enterTableRoom(data);
+});
 
 const gamePanelOverlay = document.getElementById('gamePanelOverlay');
 
@@ -209,7 +326,7 @@ function addChatMessage(from, message, isOwn = false) {
   div.className = `chat-message ${isOwn ? 'own' : 'remote'}`;
   const sender = document.createElement('div');
   sender.className = 'chat-message-sender';
-  sender.textContent = isOwn ? 'Sen' : `Katılımcı ${String(from).slice(-6)}`;
+  sender.textContent = isOwn ? 'Sen' : getParticipantDisplayName(from);
   const text = document.createElement('div');
   text.textContent = message;
   div.appendChild(sender);
@@ -273,12 +390,12 @@ socket.on('game-pending', (data) => {
   const isMe = data.player1 === socket.id;
   showGameView('pending');
   if (isMe) {
-    gamePendingStatus.textContent = `${GAME_NAMES[data.gameId] || data.gameId} – Rakip bekleniyor...`;
+    gamePendingStatus.textContent = `${GAME_NAMES[data.gameId] || data.gameId} masası açık · rakip bekleniyor`;
     gameJoinBtn?.classList.add('hidden');
-    gameCancelBtn?.classList.remove('hidden');
+    gameCancelBtn?.classList.add('hidden');
   } else {
-    gamePendingStatus.textContent = `Katılımcı ${String(data.player1).slice(-6)} ${GAME_NAMES[data.gameId] || data.gameId} oynamak istiyor`;
-    gameJoinBtn?.classList.remove('hidden');
+    gamePendingStatus.textContent = `${data.playerName || getParticipantDisplayName(data.player1)} masası açık · rakip bekleniyor`;
+    gameJoinBtn?.classList.add('hidden');
     gameCancelBtn?.classList.add('hidden');
   }
 });
@@ -286,7 +403,7 @@ socket.on('game-pending', (data) => {
 socket.on('game-pending-cleared', () => {
   pendingGame = null;
   if (isAnyGameActive()) return;
-  showGameView('catalog');
+  showGameView(currentRoomId ? 'pending' : 'catalog');
 });
 
 socket.on('game-state', (state) => {
@@ -551,7 +668,58 @@ function chessMySide(state) {
   return null;
 }
 
+function createChessPiece(piece) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '8 0 48 64');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('chess-piece-art');
+
+  const shape = document.createElementNS(svg.namespaceURI, 'path');
+  shape.setAttribute('d', CHESS_PIECE_SHAPES[piece.toUpperCase()]);
+  shape.classList.add('chess-piece-shape');
+  svg.appendChild(shape);
+
+  const details = {
+    K: 'M32 5v14m-7-7h14m-15 36h16',
+    Q: 'M17 24l15 7 15-7M22 43h20',
+    R: 'M18 31h28m-23 12h18',
+    B: 'M24 22l16 17M24 43h16',
+    N: 'M25 35c7-4 13-8 21-9m-13-9h.1M23 43h22',
+    P: 'M27 29h10m-12 11h14m-18 7h22'
+  };
+  if (piece.toUpperCase() === 'N') {
+    const eye = document.createElementNS(svg.namespaceURI, 'circle');
+    eye.setAttribute('cx', '34');
+    eye.setAttribute('cy', '19');
+    eye.setAttribute('r', '1.7');
+    eye.classList.add('chess-piece-eye');
+    svg.appendChild(eye);
+  }
+  if (piece.toUpperCase() === 'Q') {
+    for (const [cx, cy] of [[12, 17], [32, 6], [52, 17]]) {
+      const pearl = document.createElementNS(svg.namespaceURI, 'circle');
+      pearl.setAttribute('cx', String(cx));
+      pearl.setAttribute('cy', String(cy));
+      pearl.setAttribute('r', '3');
+      pearl.classList.add('chess-piece-pearl');
+      svg.appendChild(pearl);
+    }
+  }
+
+  const base = document.createElementNS(svg.namespaceURI, 'path');
+  base.setAttribute('d', 'M18 48h28l3 5 5 3v3H10v-3l5-3z');
+  base.classList.add('chess-piece-base');
+  svg.appendChild(base);
+
+  const detail = document.createElementNS(svg.namespaceURI, 'path');
+  detail.setAttribute('d', details[piece.toUpperCase()]);
+  detail.classList.add('chess-piece-detail');
+  svg.appendChild(detail);
+  return svg;
+}
+
 function renderChessState(state) {
+  const previousState = chessState;
   chessState = state;
   chessPendingPromo = null;
   chessPromo?.classList.add('hidden');
@@ -568,6 +736,9 @@ function renderChessState(state) {
   const legal = state.legalMoves || [];
   const fromMoves = chessSelected == null ? [] : legal.filter(m => m.from === chessSelected);
   const last = state.lastMove;
+  const moved = previousState?.board && last &&
+    previousState.board[last.from] !== state.board[last.from] &&
+    previousState.board[last.to] !== state.board[last.to];
 
   if (chessScore) {
     chessScore.textContent = `Beyaz: ${state.score1 || 0} — Siyah: ${state.score2 || 0}`;
@@ -613,7 +784,20 @@ function renderChessState(state) {
     if (piece) {
       const span = document.createElement('span');
       span.className = 'chess-piece ' + (piece === piece.toUpperCase() ? 'white' : 'black');
-      span.textContent = CHESS_PIECES[piece] || piece;
+      span.appendChild(createChessPiece(piece));
+      if (moved && last.to === sq) {
+        el.classList.add('piece-moving');
+        const fromDisplay = flip ? 63 - last.from : last.from;
+        const toDisplay = flip ? 63 - last.to : last.to;
+        const squareSize = chessBoard.clientWidth / 8;
+        const offsetX = ((fromDisplay % 8) - (toDisplay % 8)) * squareSize;
+        const offsetY = (Math.floor(fromDisplay / 8) - Math.floor(toDisplay / 8)) * squareSize;
+        const animation = span.animate([
+          { transform: `translate(${offsetX}px, ${offsetY}px) scale(0.96)` },
+          { transform: 'translate(0, 0) scale(1)' }
+        ], { duration: 190, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' });
+        animation.onfinish = () => animation.cancel();
+      }
       el.appendChild(span);
     }
     chessBoard.appendChild(el);
@@ -770,12 +954,11 @@ async function createPeerConnection(userId, isOfferer = false) {
 }
 
 function getParticipantDisplayName(userId) {
-  return `Katılımcı ${String(userId).slice(-6)}`;
+  return participantNames[userId] || `Oyuncu ${String(userId).slice(-4)}`;
 }
 
 function getParticipantInitial(userId) {
-  const id = String(userId).slice(-6);
-  return (id.charAt(0) || '?').toUpperCase();
+  return getParticipantDisplayName(userId).charAt(0).toUpperCase();
 }
 
 // Konuşan katılımcı göstergesi (ses seviyesi)
@@ -852,9 +1035,7 @@ function addParticipantPlaceholder(userId) {
   wrapper.className = 'video-wrapper remote';
   wrapper.dataset.hasVideo = 'false';
 
-  const placeholder = document.createElement('div');
-  placeholder.className = 'video-placeholder';
-  placeholder.innerHTML = `<span class="placeholder-initial">${getParticipantInitial(userId)}</span><span class="placeholder-name">${getParticipantDisplayName(userId)}</span>`;
+  const placeholder = createParticipantPlaceholder(userId);
 
   const label = document.createElement('div');
   label.className = 'video-label';
@@ -863,6 +1044,19 @@ function addParticipantPlaceholder(userId) {
   wrapper.appendChild(placeholder);
   wrapper.appendChild(label);
   remoteVideos.appendChild(wrapper);
+}
+
+function createParticipantPlaceholder(userId) {
+  const placeholder = document.createElement('div');
+  placeholder.className = 'video-placeholder';
+  const initial = document.createElement('span');
+  initial.className = 'placeholder-initial';
+  initial.textContent = getParticipantInitial(userId);
+  const name = document.createElement('span');
+  name.className = 'placeholder-name';
+  name.textContent = getParticipantDisplayName(userId);
+  placeholder.append(initial, name);
+  return placeholder;
 }
 
 // Uzak katılımcının sesini her zaman ayrı <audio> ile oynat (video varken de); bazı tarayıcılarda <video> sesi güvenilir oynatmıyor
@@ -934,9 +1128,7 @@ function addRemoteVideo(userId, stream) {
     // Sadece ses veya kamera kapalı - placeholder göster, ses için gizli audio
     let placeholder = wrapper.querySelector('.video-placeholder');
     if (!placeholder) {
-      placeholder = document.createElement('div');
-      placeholder.className = 'video-placeholder';
-      placeholder.innerHTML = `<span class="placeholder-initial">${getParticipantInitial(userId)}</span><span class="placeholder-name">${getParticipantDisplayName(userId)}</span>`;
+      placeholder = createParticipantPlaceholder(userId);
       wrapper.insertBefore(placeholder, wrapper.querySelector('.video-label'));
     }
     placeholder.style.display = 'flex';
@@ -961,9 +1153,7 @@ function showRemotePlaceholder(userId) {
   wrapper.dataset.hasVideo = 'false';
   let placeholder = wrapper.querySelector('.video-placeholder');
   if (!placeholder) {
-    placeholder = document.createElement('div');
-    placeholder.className = 'video-placeholder';
-    placeholder.innerHTML = `<span class="placeholder-initial">${getParticipantInitial(userId)}</span><span class="placeholder-name">${getParticipantDisplayName(userId)}</span>`;
+    placeholder = createParticipantPlaceholder(userId);
     wrapper.insertBefore(placeholder, wrapper.querySelector('.video-label'));
   }
   placeholder.style.display = 'flex';
@@ -1004,19 +1194,23 @@ function updateParticipantCount() {
 
 // Socket olayları
 socket.on('room-users', async (users) => {
-  for (const userId of users) {
+  for (const user of users) {
+    const userId = typeof user === 'string' ? user : user.id;
+    if (typeof user !== 'string' && user.name) participantNames[userId] = user.name;
     await handleNewUser(userId);
   }
   updateParticipantCount();
 });
 
 // user-joined: Sadece bilgi - offer'ı yeni katılan gönderecek (room-users ile)
-socket.on('user-joined', () => {
+socket.on('user-joined', (user) => {
+  if (user?.id && user.name) participantNames[user.id] = user.name;
   updateParticipantCount();
 });
 
 socket.on('user-left', (userId) => {
   removeRemoteVideo(userId);
+  delete participantNames[userId];
 });
 
 // Bir katılımcı kamerayı kapattığında karşı tarafta ikon (placeholder) göster
@@ -1127,6 +1321,7 @@ function leaveRoom() {
 
   remoteVideos.innerHTML = '';
   localVideo.srcObject = null;
+  Object.keys(participantNames).forEach(id => delete participantNames[id]);
 
   if (chatMessages) chatMessages.innerHTML = '';
   if (chatPanel) chatPanel.classList.add('hidden');
@@ -1149,9 +1344,8 @@ function leaveRoom() {
 
   currentRoomId = null;
   conference.classList.add('hidden');
-  lobby.classList.remove('hidden');
-  roomIdInput.value = generateRoomId();
-  connectionStatus.textContent = 'Bağlanıyor...';
+  tableLobby.classList.remove('hidden');
+  connectionStatus.textContent = 'Lobi';
   connectionStatus.classList.remove('connected');
 }
 

@@ -7,6 +7,7 @@ const express = require('express');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 const path = require('path');
 
@@ -164,8 +165,158 @@ function emitGameState(roomId) {
   io.to(roomId).emit('game-state', payload);
 }
 
+function getTableList() {
+  return [...rooms.entries()]
+    .filter(([, room]) => room.isTable && room.users.size > 0)
+    .map(([roomId, room]) => ({
+      roomId,
+      gameId: room.gameId,
+      hostName: io.sockets.sockets.get(room.userOrder[0])?.displayName || 'Oyuncu',
+      opponentName: room.userOrder[1]
+        ? io.sockets.sockets.get(room.userOrder[1])?.displayName || 'Oyuncu'
+        : null,
+      playerCount: room.users.size,
+      status: room.users.size > 1 ? 'playing' : 'waiting'
+    }));
+}
+
+function emitTableList() {
+  io.emit('table-list', getTableList());
+}
+
+function addSocketToRoom(socket, roomId, room) {
+  room.users.add(socket.id);
+  room.userOrder.push(socket.id);
+  socket.roomId = roomId;
+  socket.join(roomId);
+
+  socket.to(roomId).emit('user-joined', { id: socket.id, name: socket.displayName });
+  const otherUsers = room.userOrder
+    .filter(id => id !== socket.id)
+    .map(id => ({ id, name: io.sockets.sockets.get(id)?.displayName || 'Oyuncu' }));
+  socket.emit('room-users', otherUsers);
+}
+
+function removeSocketFromRoom(socket) {
+  const roomId = socket.roomId;
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+
+  socket.to(roomId).emit('user-left', socket.id);
+  socket.leave(roomId);
+  socket.roomId = null;
+
+  if (room) {
+    room.users.delete(socket.id);
+    room.userOrder = room.userOrder.filter(id => id !== socket.id);
+    if (room.users.size === 0) {
+      rooms.delete(roomId);
+      gameState.delete(roomId);
+    } else if (room.isTable) {
+      const hostId = room.userOrder[0];
+      room.pendingGame = {
+        gameId: room.gameId,
+        player1: hostId,
+        playerName: io.sockets.sockets.get(hostId)?.displayName || 'Oyuncu'
+      };
+      gameState.delete(roomId);
+      delete room.pendingResetFrom;
+      io.to(roomId).emit('game-pending', room.pendingGame);
+    } else {
+      const game = gameState.get(roomId);
+      if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
+        gameState.set(roomId, createGameById(game.gameId));
+        delete room.pendingGame;
+        io.to(roomId).emit('game-pending-cleared');
+        emitGameState(roomId);
+      } else if (room.pendingGame?.player1 === socket.id) {
+        delete room.pendingGame;
+        io.to(roomId).emit('game-pending-cleared');
+      }
+    }
+  }
+  emitTableList();
+}
+
 io.on('connection', (socket) => {
   console.log('Yeni kullanıcı bağlandı:', socket.id);
+
+  socket.on('lobby-join', (rawName) => {
+    if (socket.roomId) {
+      socket.emit('lobby-error', 'Önce bulunduğun masadan ayrıl.');
+      return;
+    }
+    const name = typeof rawName === 'string' ? rawName.trim().slice(0, 24) : '';
+    if (!name) {
+      socket.emit('lobby-error', 'Lütfen bir isim yaz.');
+      return;
+    }
+    socket.displayName = name;
+    socket.emit('lobby-ready', { name });
+    socket.emit('table-list', getTableList());
+  });
+
+  socket.on('table-create', (gameId) => {
+    if (!socket.displayName) {
+      socket.emit('table-error', 'Önce adını girip lobiye katıl.');
+      return;
+    }
+    if (socket.roomId) {
+      socket.emit('table-error', 'Yeni masa açmadan önce bulunduğun masadan ayrıl.');
+      return;
+    }
+    if (!['tictactoe', 'battleship', 'chess'].includes(gameId)) {
+      socket.emit('table-error', 'Bu oyun türü kullanılamıyor.');
+      return;
+    }
+
+    let roomId;
+    do {
+      roomId = `table-${crypto.randomBytes(4).toString('hex')}`;
+    } while (rooms.has(roomId));
+    const room = {
+      isTable: true,
+      gameId,
+      users: new Set(),
+      userOrder: [],
+      pendingGame: { gameId, player1: socket.id, playerName: socket.displayName }
+    };
+    rooms.set(roomId, room);
+    addSocketToRoom(socket, roomId, room);
+    socket.emit('table-joined', { roomId, gameId });
+    io.to(roomId).emit('game-pending', room.pendingGame);
+    emitTableList();
+  });
+
+  socket.on('table-join', (roomId) => {
+    if (!socket.displayName) {
+      socket.emit('table-error', 'Önce adını girip lobiye katıl.');
+      return;
+    }
+    if (socket.roomId) {
+      socket.emit('table-error', 'Önce bulunduğun masadan ayrıl.');
+      return;
+    }
+    const room = rooms.get(roomId);
+    if (!room?.isTable || !room.pendingGame || room.users.size !== 1) {
+      socket.emit('table-error', 'Bu masa artık açık değil. Lütfen başka bir masa seç.');
+      emitTableList();
+      return;
+    }
+
+    const { gameId, player1 } = room.pendingGame;
+    addSocketToRoom(socket, roomId, room);
+    delete room.pendingGame;
+    const game = createGameById(gameId);
+    game.player1 = player1;
+    game.player2 = socket.id;
+    gameState.set(roomId, game);
+
+    socket.emit('table-joined', { roomId, gameId });
+    io.to(roomId).emit('game-pending-cleared');
+    emitGameState(roomId);
+    emitTableList();
+  });
 
   socket.on('join-room', (roomId) => {
     if (!rooms.has(roomId)) {
@@ -179,9 +330,11 @@ io.on('connection', (socket) => {
 
     if (!gameState.has(roomId)) gameState.set(roomId, getInitialGameState());
 
-    socket.to(roomId).emit('user-joined', socket.id);
+    socket.to(roomId).emit('user-joined', { id: socket.id, name: socket.displayName || 'Oyuncu' });
 
-    const otherUsers = [...room.users].filter(id => id !== socket.id);
+    const otherUsers = [...room.users]
+      .filter(id => id !== socket.id)
+      .map(id => ({ id, name: io.sockets.sockets.get(id)?.displayName || 'Oyuncu' }));
     socket.emit('room-users', otherUsers);
 
     const game = gameState.get(roomId);
@@ -393,56 +546,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave-room', () => {
-    if (socket.roomId) {
-      socket.to(socket.roomId).emit('user-left', socket.id);
-      const room = rooms.get(socket.roomId);
-      if (room) {
-        room.users.delete(socket.id);
-        room.userOrder = room.userOrder.filter(id => id !== socket.id);
-        if (room.users.size === 0) {
-          rooms.delete(socket.roomId);
-          gameState.delete(socket.roomId);
-        } else {
-          const game = gameState.get(socket.roomId);
-          if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
-            gameState.set(socket.roomId, createGameById(game.gameId));
-            delete room.pendingGame;
-            io.to(socket.roomId).emit('game-pending-cleared');
-            emitGameState(socket.roomId);
-          } else if (room.pendingGame?.player1 === socket.id) {
-            delete room.pendingGame;
-            io.to(socket.roomId).emit('game-pending-cleared');
-          }
-        }
-      }
-      socket.roomId = null;
-    }
+    removeSocketFromRoom(socket);
   });
 
   socket.on('disconnect', () => {
-    if (socket.roomId) {
-      socket.to(socket.roomId).emit('user-left', socket.id);
-      const room = rooms.get(socket.roomId);
-      if (room) {
-        room.users.delete(socket.id);
-        room.userOrder = room.userOrder.filter(id => id !== socket.id);
-        if (room.users.size === 0) {
-          rooms.delete(socket.roomId);
-          gameState.delete(socket.roomId);
-        } else {
-          const game = gameState.get(socket.roomId);
-          if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
-            gameState.set(socket.roomId, createGameById(game.gameId));
-            delete room.pendingGame;
-            io.to(socket.roomId).emit('game-pending-cleared');
-            emitGameState(socket.roomId);
-          } else if (room.pendingGame?.player1 === socket.id) {
-            delete room.pendingGame;
-            io.to(socket.roomId).emit('game-pending-cleared');
-          }
-        }
-      }
-    }
+    removeSocketFromRoom(socket);
     console.log('Kullanıcı ayrıldı:', socket.id);
   });
 });
