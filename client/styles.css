@@ -49,23 +49,40 @@ body {
   justify-content: center;
   min-height: 100vh;
   padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(193, 137, 74, 0.15), transparent 48%),
+    var(--bg-dark);
 }
 
 .lobby-card {
-  background: var(--bg-card);
-  border-radius: var(--radius);
-  padding: 48px;
-  max-width: 420px;
+  background: linear-gradient(155deg, rgba(35, 45, 57, 0.98), rgba(23, 29, 37, 0.98));
+  border-radius: 20px;
+  padding: 44px;
+  max-width: 460px;
   width: 100%;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  border: 1px solid rgba(214, 164, 94, 0.25);
+  text-align: center;
+}
+
+.brand-mark {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 20px;
+  border: 1px solid rgba(214, 164, 94, 0.55);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(214, 164, 94, 0.2), rgba(214, 164, 94, 0.04));
+  color: #e4bd83;
+  font-size: 2rem;
 }
 
 .lobby-card h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: clamp(1.8rem, 5vw, 2.35rem);
+  font-weight: 750;
   margin-bottom: 8px;
-  background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+  background: linear-gradient(135deg, #fff4df 0%, #d6a45e 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -74,11 +91,13 @@ body {
 .subtitle {
   color: var(--text-muted);
   font-size: 0.95rem;
-  margin-bottom: 32px;
+  margin: 0 auto 32px;
+  max-width: 310px;
 }
 
 .form-group {
   margin-bottom: 24px;
+  text-align: left;
 }
 
 .form-group label {
@@ -101,7 +120,8 @@ body {
 
 .form-group input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: #d6a45e;
+  box-shadow: 0 0 0 3px rgba(214, 164, 94, 0.12);
 }
 
 .form-group small {
@@ -115,6 +135,291 @@ body {
   color: var(--text-muted);
   font-size: 0.85rem;
   margin-bottom: 20px;
+}
+
+.lobby-card .btn-primary,
+.create-table-actions .btn-primary,
+.table-join-btn {
+  background: linear-gradient(135deg, #c9924d, #e0b16b);
+  color: #20170d;
+  box-shadow: 0 8px 24px rgba(201, 146, 77, 0.16);
+}
+
+.lobby-card .btn-primary:hover,
+.create-table-actions .btn-primary:hover,
+.table-join-btn:hover {
+  background: linear-gradient(135deg, #d6a45e, #edc581);
+}
+
+.table-join-btn:disabled {
+  opacity: 0.58;
+  cursor: default;
+  box-shadow: none;
+}
+
+.lobby-error {
+  color: #ff938e;
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+}
+
+.table-lobby {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 80% -5%, rgba(150, 104, 51, 0.16), transparent 42%),
+    #10151b;
+}
+
+.lobby-header {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px clamp(20px, 5vw, 76px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(18, 23, 29, 0.72);
+}
+
+.lobby-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #e2b978;
+  font-size: 1.2rem;
+  font-weight: 750;
+  text-decoration: none;
+  letter-spacing: -0.03em;
+}
+
+.lobby-brand:first-letter {
+  font-size: 1.6rem;
+}
+
+.lobby-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e4e6e8;
+  font-size: 0.9rem;
+}
+
+.lobby-user-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #67d39a;
+  box-shadow: 0 0 10px rgba(103, 211, 154, 0.65);
+}
+
+.lobby-user .btn {
+  margin-left: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+
+.table-lobby-content {
+  width: min(100% - 40px, 1000px);
+  margin: 0 auto;
+  padding: clamp(38px, 7vw, 76px) 0 64px;
+}
+
+.lobby-intro {
+  margin-bottom: 32px;
+}
+
+.eyebrow {
+  color: #d6a45e;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.17em;
+}
+
+.lobby-intro h1 {
+  margin: 8px 0 6px;
+  color: #f5f1e9;
+  font-size: clamp(2.1rem, 5vw, 3.25rem);
+  letter-spacing: -0.055em;
+  line-height: 1.1;
+}
+
+.lobby-intro p,
+.create-table-copy p {
+  color: #939ba4;
+  font-size: 0.96rem;
+}
+
+.create-table-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 26px;
+  margin-bottom: 48px;
+  border: 1px solid rgba(214, 164, 94, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgba(39, 43, 45, 0.98), rgba(31, 36, 41, 0.9));
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.2);
+}
+
+.create-table-copy h2,
+.open-tables-heading h2 {
+  margin: 5px 0;
+  color: #f4f1eb;
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+}
+
+.create-table-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.create-table-actions select {
+  min-width: 160px;
+  padding: 12px 36px 12px 14px;
+  border: 1px solid #444a50;
+  border-radius: 9px;
+  background: #171c21;
+  color: #f1eee8;
+  font: inherit;
+}
+
+.create-table-actions select:focus {
+  outline: 2px solid rgba(214, 164, 94, 0.5);
+  outline-offset: 2px;
+}
+
+.create-table-actions .btn {
+  white-space: nowrap;
+}
+
+.open-tables-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.table-count {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #aab0b6;
+  font-size: 0.78rem;
+}
+
+.table-list {
+  display: grid;
+  gap: 11px;
+}
+
+.table-card {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 96px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: linear-gradient(105deg, rgba(33, 39, 45, 0.96), rgba(26, 32, 38, 0.92));
+  transition: border-color 0.18s, transform 0.18s, background 0.18s;
+}
+
+.table-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(214, 164, 94, 0.34);
+  background: #242b31;
+}
+
+.table-card-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  background: rgba(214, 164, 94, 0.12);
+  color: #e6bd7c;
+  font-size: 1.75rem;
+}
+
+.table-card-icon.tictactoe {
+  color: #80c4e9;
+  background: rgba(58, 152, 199, 0.12);
+}
+
+.table-card-icon.battleship {
+  color: #83c4b2;
+  background: rgba(71, 163, 137, 0.12);
+}
+
+.table-card-details h3 {
+  color: #f2eee7;
+  font-size: 1rem;
+}
+
+.table-card-details p {
+  margin-top: 2px;
+  color: #aeb4ba;
+  font-size: 0.86rem;
+}
+
+.table-card-meta {
+  display: block;
+  margin-top: 4px;
+  color: #777f87;
+  font-size: 0.74rem;
+}
+
+.table-seats {
+  color: #9da5ad;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.table-join-btn {
+  width: auto;
+  padding: 10px 15px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.empty-tables {
+  padding: 42px 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  color: #89919a;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.table-room-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-game-label {
+  padding: 4px 9px;
+  border: 1px solid rgba(214, 164, 94, 0.28);
+  border-radius: 999px;
+  color: #d6a45e;
+  font-size: 0.72rem;
 }
 
 /* Buttons */
@@ -210,6 +515,31 @@ body {
 }
 
 @media (max-width: 768px) {
+  .lobby-header {
+    min-height: 66px;
+    padding-inline: 20px;
+  }
+
+  .lobby-brand {
+    font-size: 1rem;
+  }
+
+  .table-lobby-content {
+    width: min(100% - 32px, 640px);
+  }
+
+  .create-table-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+    padding: 21px;
+    margin-bottom: 38px;
+  }
+
+  .create-table-actions select {
+    flex: 1;
+  }
+
   .header-actions {
     display: none;
   }
@@ -259,6 +589,73 @@ body {
     justify-content: flex-start;
     padding: 12px 16px;
     width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .lobby {
+    padding: 18px;
+  }
+
+  .lobby-card {
+    padding: 32px 24px;
+  }
+
+  .lobby-header {
+    padding-inline: 14px;
+  }
+
+  .lobby-brand span {
+    display: none;
+  }
+
+  .lobby-user {
+    gap: 7px;
+    font-size: 0.82rem;
+  }
+
+  .lobby-user .btn {
+    margin-left: 0;
+    padding: 7px;
+    font-size: 0.72rem;
+  }
+
+  .table-lobby-content {
+    width: calc(100% - 28px);
+    padding-top: 38px;
+  }
+
+  .create-table-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .create-table-actions select,
+  .create-table-actions .btn {
+    width: 100%;
+  }
+
+  .table-card {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .table-card-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 1.45rem;
+  }
+
+  .table-seats {
+    display: none;
+  }
+
+  .table-join-btn {
+    grid-column: 2 / 4;
+    justify-self: stretch;
+    width: 100%;
+    padding: 9px 12px;
   }
 }
 
@@ -551,18 +948,6 @@ body {
 }
 
 /* Chess Board - Piece Movement Animations */
-@keyframes pieceMoveScale {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15) translateY(-8px);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
 @keyframes squareGlow {
   0%, 100% {
     box-shadow: inset 0 0 0 0 rgba(255, 140, 0, 0.3);
@@ -628,6 +1013,10 @@ body {
   box-shadow: inset 0 0 0 3px #FF8C00;
 }
 
+.chess-square.piece-moving {
+  z-index: 2;
+}
+
 .chess-square.last-move {
   box-shadow: inset 0 0 0 2px rgba(255, 140, 0, 0.5);
 }
@@ -671,22 +1060,72 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  z-index: 1;
+  width: 86%;
+  height: 86%;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45));
 }
 
 .chess-piece.white {
-  color: #f7f8f8;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  color: #f5f5f2;
 }
 
 .chess-piece.black {
-  color: #1a1a1a;
-  text-shadow: 0 0 2px rgba(255, 255, 255, 0.4);
+  color: #24262b;
 }
 
-/* Piece movement animation - applies during moves */
-.chess-square:not(.last-move) .chess-piece {
-  animation: pieceMoveScale 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+.chess-piece-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.chess-piece-shape {
+  fill: currentColor;
+  stroke: #36363b;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chess-piece-base {
+  fill: currentColor;
+  stroke: #36363b;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.chess-piece-detail {
+  fill: none;
+  stroke: #85858a;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chess-piece.black .chess-piece-detail {
+  stroke: #55585f;
+}
+
+.chess-piece.black .chess-piece-shape,
+.chess-piece.black .chess-piece-base {
+  stroke: #101114;
+}
+
+.chess-piece-eye,
+.chess-piece-pearl {
+  fill: currentColor;
+  stroke: #36363b;
+  stroke-width: 2.5;
+}
+
+.chess-piece.black .chess-piece-eye,
+.chess-piece.black .chess-piece-pearl {
+  fill: #41444a;
+  stroke: #101114;
 }
 
 .chess-promo {

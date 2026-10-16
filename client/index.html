@@ -3,33 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video Konferans</title>
+  <title>Oyun Masaları</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app">
-    <!-- Bağlantı ekranı -->
     <div id="lobby" class="lobby">
       <div class="lobby-card">
-        <h1>Video Konferans</h1>
-        <p class="subtitle">WebRTC ile gerçek zamanlı görüşme</p>
+        <div class="brand-mark" aria-hidden="true">♟</div>
+        <h1>Oyun Masaları</h1>
+        <p class="subtitle">Arkadaşlarınla aynı masada buluş, oyuna başla.</p>
         <div class="form-group">
-          <label for="roomId">Oda ID</label>
-          <input type="text" id="roomId" placeholder="örn: toplantı-123" maxlength="20">
-          <small>Aynı oda ID'sini kullanan herkes aynı görüşmeye katılır</small>
+          <label for="displayNameInput">Masa arkadaşların seni nasıl tanısın?</label>
+          <input type="text" id="displayNameInput" placeholder="Adını yaz" maxlength="24" autocomplete="nickname">
         </div>
-        <p class="optional-hint">Kamera ve mikrofon izni zorunlu değil — görüşme içinde açabilirsiniz</p>
-        <button id="joinBtn" class="btn btn-primary">
-          <span class="btn-icon">▶</span>
-          Odaya Katıl
-        </button>
+        <p id="lobbyError" class="lobby-error hidden" role="alert"></p>
+        <button id="joinBtn" class="btn btn-primary">Masaları gör</button>
       </div>
     </div>
 
-    <!-- Görüşme ekranı -->
+    <section id="tableLobby" class="table-lobby hidden">
+      <header class="lobby-header">
+        <a class="lobby-brand" href="#" aria-label="Oyun Masaları">♟ <span>Oyun Masaları</span></a>
+        <div class="lobby-user">
+          <span class="lobby-user-dot"></span>
+          <span id="lobbyUserName"></span>
+          <button id="changeNameBtn" class="btn btn-icon" type="button">Adı değiştir</button>
+        </div>
+      </header>
+      <main class="table-lobby-content">
+        <div class="lobby-intro">
+          <span class="eyebrow">OYUN LOBİSİ</span>
+          <h1>Bir masaya çekil.</h1>
+          <p>Bir oyun seçip kendi masanı kur veya açık masalardan birine katıl.</p>
+        </div>
+        <section class="create-table-card" aria-labelledby="createTableHeading">
+          <div class="create-table-copy">
+            <span class="eyebrow">KENDİ MASAN</span>
+            <h2 id="createTableHeading">Yeni masa aç</h2>
+            <p>Oyunu seç, rakibin gelince oyun başlasın.</p>
+          </div>
+          <div class="create-table-actions">
+            <label class="visually-hidden" for="newTableGame">Oyun türü</label>
+            <select id="newTableGame">
+              <option value="chess">Satranç</option>
+              <option value="tictactoe">XOX</option>
+              <option value="battleship">Amiral Battı</option>
+            </select>
+            <button id="createTableBtn" class="btn btn-primary" type="button">＋ Masa aç</button>
+          </div>
+        </section>
+        <section class="open-tables-section" aria-labelledby="openTablesHeading">
+          <div class="open-tables-heading">
+            <div>
+              <span class="eyebrow">CANLI LOBİ</span>
+              <h2 id="openTablesHeading">Oyun masaları</h2>
+            </div>
+            <span id="tableCount" class="table-count">0 masa</span>
+          </div>
+          <div id="tableList" class="table-list" aria-live="polite"></div>
+          <p id="emptyTables" class="empty-tables">Şu an masa yok. İlk masayı sen kur!</p>
+          <p id="tableLobbyError" class="lobby-error hidden" role="alert"></p>
+        </section>
+      </main>
+    </section>
+
     <div id="conference" class="conference hidden">
       <div class="header">
-        <h2 id="roomTitle">Oda: -</h2>
+        <div class="table-room-heading">
+          <h2 id="roomTitle">Oyun masası</h2>
+          <span id="tableGameLabel" class="table-game-label"></span>
+        </div>
         <div class="header-actions">
           <button id="gameToggleBtn" class="btn btn-icon" title="Oyunlar">
             <span>🎮</span>
@@ -46,7 +90,7 @@
           <button id="toggleVideoBtn" class="btn btn-icon" title="Kamera">
             <span id="videoIcon">📹</span>
           </button>
-          <button id="leaveBtn" class="btn btn-danger">Ayrıl</button>
+          <button id="leaveBtn" class="btn btn-danger">Lobiye dön</button>
         </div>
         <button id="headerMenuBtn" class="btn btn-icon header-menu-btn" title="Menü" aria-label="Menü">
           <span class="hamburger-icon">☰</span>
@@ -59,7 +103,7 @@
           <button id="screenShareBtnMenu" class="btn btn-icon header-menu-item" title="Ekran paylaş">🖥️ Ekran paylaş</button>
           <button id="toggleMuteBtnMenu" class="btn btn-icon header-menu-item" title="Mikrofon"><span id="muteIconMenu">🎤</span> Mikrofon</button>
           <button id="toggleVideoBtnMenu" class="btn btn-icon header-menu-item" title="Kamera"><span id="videoIconMenu">📹</span> Kamera</button>
-          <button id="leaveBtnMenu" class="btn btn-danger header-menu-item">Ayrıl</button>
+          <button id="leaveBtnMenu" class="btn btn-danger header-menu-item">Lobiye dön</button>
         </div>
       </div>
       <div id="gamePanelOverlay" class="game-panel-overlay hidden"></div>
@@ -68,7 +112,7 @@
         <div id="gamePanel" class="game-panel">
           <!-- Oyun kataloğu -->
           <div id="gameCatalog" class="game-catalog">
-            <h3>Oyunlar</h3>
+            <h3>Bir oyun masası aç</h3>
             <div class="game-catalog-list">
               <button class="game-catalog-item" data-game="tictactoe">XOX</button>
               <button class="game-catalog-item" data-game="battleship">Amiral Battı</button>
@@ -148,15 +192,15 @@
           </div>
         </div>
         <aside class="connections-rail" aria-label="Bağlantılar">
-          <div class="connections-header">Bağlantılar</div>
+          <div class="connections-header">Masa arkadaşların</div>
           <div id="videos" class="videos-container">
             <div class="video-wrapper local" id="localVideoWrapper">
               <video id="localVideo" autoplay muted playsinline></video>
               <div class="video-placeholder local-placeholder" id="localPlaceholder">
-                <span class="placeholder-initial">S</span>
-                <span class="placeholder-name">Sen</span>
+                <span class="placeholder-initial" id="localInitial">?</span>
+                <span class="placeholder-name" id="localDisplayName">Oyuncu</span>
               </div>
-              <div class="video-label">Sen</div>
+              <div class="video-label" id="localVideoLabel">Sen</div>
             </div>
             <div id="remoteVideos" class="remote-videos"></div>
           </div>

@@ -1,6 +1,6 @@
-# Video Konferans
+# Oyun Masaları
 
-WebRTC tabanlı basit video konferans uygulaması. Tarayıcıdan doğrudan peer-to-peer görüşme yapabilirsiniz.
+Oyuncuların adlarıyla katıldığı, açık oyun masalarını görüp yeni masa oluşturabildiği gerçek zamanlı oyun uygulaması. Oyun sırasında oyuncular WebRTC ile sesli/görüntülü görüşebilir.
 
 ## Özellikler
 
@@ -8,11 +8,14 @@ WebRTC tabanlı basit video konferans uygulaması. Tarayıcıdan doğrudan peer-
 - 🖥️ Ekran paylaşımı
 - 🎤 Mikrofon aç/kapa
 - 📹 Kamera aç/kapa
-- 🔗 Oda tabanlı katılım (aynı oda ID'si = aynı görüşme)
+- 🎲 Canlı oyun lobisi ve açık masa listesi
+- 🪑 Oyun türü seçerek masa oluşturma ve masaya katılma
+- ♟️ İki kişilik satranç, XOX ve Amiral Battı
 - 📱 Responsive arayüz
-- 🎮 **Oyunlar** – Görüşme sırasında oynanabilir oyunlar:
+- 🎮 **Oyunlar:**
+  - **Satranç** – Hamle animasyonları ve skor takibi
   - **XOX (TicTacToe)** – Klasik 3x3 X-O oyunu
-  - **Amiral Battı** – İki kişilik deniz savaşı oyunu
+  - **Amiral Battı** – İki kişilik deniz savaşı ve filo yerleştirme
 
 ## Proje yapısı
 
@@ -98,20 +101,19 @@ npm start
 
 ## Kullanım
 
-1. Tarayıcıda `http://localhost:3000` adresini açın
-2. Oda ID girin (veya otomatik oluşturulanı kullanın)
-3. **Odaya Katıl** butonuna tıklayın
-4. Kamera/mikrofon izni verin
-5. Başka bir sekme veya cihazda aynı oda ID'si ile katılın
-
-**İpucu:** Aynı görüşmeye katılmak için tüm katılımcıların aynı oda ID'sini kullanması gerekir.
+1. Tarayıcıda `http://localhost:3000` adresini açın.
+2. Masada görünecek adınızı yazıp **Masaları gör** butonuna tıklayın.
+3. Var olan açık bir masaya katılın veya oyun türünü seçip **Masa aç** butonuna tıklayın.
+4. Rakibiniz masaya katılınca oyun otomatik başlar.
+5. Oyun ekranından isterseniz mikrofonunuzu, kameranızı veya ekran paylaşımını açın.
 
 ## Oyunlar
 
-Konferans sırasında sol menüden (🎮) oyunlar açılabilir. Oyunlar yalnızca odaya katılan ilk iki oyuncu arasında oynanır:
+Her masa iki oyuncu içindir. Masa sahibi oyunu seçer; ikinci oyuncu açık masalardan birine katılarak oyunu başlatır.
 
-- **XOX:** Biri oyunu seçer, diğeri "Katıl" ile oyuna girer. Skor tutulur; yeniden başlatmak için rakip onayı gerekir.
-- **Amiral Battı:** Aynı şekilde seçim ve katılım. Her oyuncu gemilerini yerleştirir, ardından sırayla ateş eder. Tüm düşman gemilerini batıran kazanır.
+- **Satranç:** Sırayla hamle yapın; yeniden başlatma için rakip onayı gerekir.
+- **XOX:** Klasik üçe üç X-O oyunu; yeniden başlatma için rakip onayı gerekir.
+- **Amiral Battı:** Her oyuncu gemilerini yerleştirir, ardından sırayla ateş eder. Tüm düşman gemilerini batıran kazanır.
 
 ## Geliştirme
 
