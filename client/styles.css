@@ -293,6 +293,10 @@ body {
   outline-offset: 2px;
 }
 
+.create-table-actions select.hidden {
+  display: none;
+}
+
 .create-table-actions .btn {
   white-space: nowrap;
 }
@@ -760,6 +764,31 @@ body {
   transform: translateY(-2px);
 }
 
+.lingo-catalog-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.lingo-catalog-options select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-dark);
+  color: var(--text);
+  font: inherit;
+}
+
+.lingo-catalog-options .game-catalog-item {
+  padding: 10px 16px;
+  font-size: 0.9rem;
+}
+
 /* Bekleme / Katıl */
 .game-pending {
   flex: 1;
@@ -850,6 +879,161 @@ body {
 .game-cell.winning {
   background: rgba(0, 186, 124, 0.2);
   border-color: #00ba7c;
+}
+
+.game-lingo {
+  gap: 10px;
+}
+
+.lingo-timer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 4px 10px;
+  border: 1px solid rgba(214, 164, 94, 0.35);
+  border-radius: 999px;
+  color: #e4bd83;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lingo-timer.is-low {
+  border-color: var(--danger);
+  color: #ff858b;
+}
+
+.lingo-board {
+  display: grid;
+  gap: 5px;
+}
+
+.lingo-row {
+  display: grid;
+  grid-template-columns: repeat(var(--lingo-length), 42px);
+  gap: 5px;
+}
+
+.lingo-tile {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 750;
+}
+
+.lingo-tile.correct {
+  border-color: #218838;
+  background: #218838;
+}
+
+.lingo-tile.present {
+  border-color: #d49b22;
+  background: #b78113;
+}
+
+.lingo-tile.absent {
+  border-color: #3e454c;
+  background: #3e454c;
+  color: #c4c9ce;
+}
+
+.lingo-row.timed-out .lingo-tile {
+  border-color: rgba(244, 33, 46, 0.42);
+  background: rgba(244, 33, 46, 0.16);
+  color: rgba(255, 146, 151, 0.6);
+  opacity: 0.55;
+}
+
+.lingo-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(100%, 390px);
+}
+
+.lingo-key-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.lingo-key-row.row-2 {
+  padding-inline: 14px;
+}
+
+.lingo-key-row.row-3 {
+  padding-inline: 4px;
+}
+
+.lingo-key {
+  min-width: 0;
+  flex: 1;
+  max-width: 34px;
+  min-height: 38px;
+  padding: 4px 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.lingo-key:hover:not(:disabled) {
+  border-color: #d6a45e;
+  background: #344554;
+}
+
+.lingo-key.used-absent {
+  opacity: 0.3;
+}
+
+.lingo-key.used-present {
+  border-color: #a77713;
+  background: #8b6416;
+  opacity: 0.65;
+}
+
+.lingo-key.used-correct {
+  border-color: #218838;
+  background: #218838;
+  opacity: 0.72;
+}
+
+.lingo-key-action {
+  flex: 1.5;
+  max-width: 52px;
+  font-size: 1.2rem;
+}
+
+.lingo-key:disabled,
+.lingo-submit:disabled {
+  cursor: not-allowed;
+}
+
+.lingo-key:disabled:not(.used-absent):not(.used-present):not(.used-correct) {
+  opacity: 0.45;
+}
+
+.lingo-submit {
+  width: min(100%, 390px);
+  padding: 9px 14px;
+  font-size: 0.9rem;
+}
+
+.lingo-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 /* Amiral Batı */
@@ -1213,6 +1397,17 @@ body {
     gap: 3px;
   }
 
+  .lingo-row {
+    grid-template-columns: repeat(var(--lingo-length), 36px);
+    gap: 4px;
+  }
+
+  .lingo-tile {
+    width: 36px;
+    height: 36px;
+    font-size: 1.1rem;
+  }
+
   .game-cell {
     width: 42px;
     height: 42px;
@@ -1251,6 +1446,25 @@ body {
 }
 
 @media (max-width: 480px) {
+  .lingo-keyboard {
+    gap: 4px;
+  }
+
+  .lingo-key-row {
+    gap: 3px;
+  }
+
+  .lingo-key-row.row-2 {
+    padding-inline: 8px;
+  }
+
+  .lingo-key {
+    max-width: none;
+    min-height: 36px;
+    padding-inline: 0;
+    font-size: 0.82rem;
+  }
+
   .game-panel {
     width: 240px;
     padding: 12px;

@@ -46,9 +46,67 @@ const rooms = new Map();
 
 // Oyun durumu: { roomId: { board, currentTurn, winner, player1, player2 } }
 const gameState = new Map();
+const lingoTimers = new Map();
 
 const BATTLE_SIZE = 8;
 const BATTLE_SHIPS = [4, 3, 2, 2];
+const LINGO_TURN_MS = 30_000;
+const LINGO_MAX_GUESSES = 6;
+const LINGO_WORDS = {
+  4: [
+    'masa', 'kedi', 'kale', 'sarı', 'evet', 'para', 'okul', 'hava', 'kalp', 'elma',
+    'kapı', 'saat', 'dert', 'gece', 'renk', 'köşe', 'dost', 'kötü', 'yeni', 'eski',
+    'açık', 'mavi', 'ödev', 'ders', 'film', 'oyun', 'aile', 'anne', 'baba', 'isim',
+    'kutu', 'kafa', 'ayak', 'ince', 'ufak', 'uzun', 'kısa', 'sert', 'aynı', 'tane',
+    'adet', 'yazı', 'kira', 'ucuz', 'paha', 'borç', 'kart', 'orta', 'özel', 'araç',
+    'evde', 'evim', 'sonu', 'yine', 'biri', 'daha'
+  ],
+  5: [
+    'kalem', 'kitap', 'deniz', 'çiçek', 'üzgün', 'güzel', 'araba', 'dünya', 'insan', 'çocuk',
+    'kadın', 'erkek', 'şehir', 'hafta', 'sabah', 'akşam', 'bugün', 'yarın', 'güneş', 'meyve',
+    'bulut', 'şarkı', 'müzik', 'yemek', 'ekmek', 'kahve', 'tatlı', 'armut', 'kiraz', 'limon',
+    'biber', 'soğan', 'sokak', 'cadde', 'sahil', 'orman', 'bahçe', 'çimen', 'çanta', 'ekran',
+    'mesaj', 'cevap', 'fikir', 'zaman', 'hayat', 'sevgi', 'kavga', 'mutlu', 'hasta', 'sıcak',
+    'soğuk', 'küçük', 'büyük', 'beyaz', 'siyah', 'hızlı', 'yavaş', 'doğru', 'temiz', 'rahat',
+    'kolay', 'yakın', 'geniş', 'güçlü', 'canlı', 'yaşlı', 'yarım', 'başka', 'bütün', 'kadar',
+    'çünkü', 'belki', 'hemen', 'düşün', 'güven', 'kendi', 'hepsi', 'seçim', 'işler', 'buluş',
+    'şimdi', 'sonra', 'hangi', 'neden', 'böyle', 'şöyle', 'sabır', 'sevda', 'tatil', 'bilet',
+    'banka', 'hesap', 'dolap', 'duvar', 'tavan', 'tabak', 'bıçak', 'kaşık', 'perde'
+  ],
+  6: [
+    'bardak', 'bayrak', 'kaptan', 'fındık', 'ananas', 'mevsim', 'toprak', 'bakkal', 'zeytin', 'balkon',
+    'mutfak', 'merkez', 'yanlış', 'önemli', 'ülkede', 'bahçem', 'şurada', 'burada', 'dışarı', 'kaleci',
+    'futbol', 'doktor', 'okulda', 'evinde', 'sağlık', 'geçmiş', 'gazete', 'hikâye', 'eğitim', 'kazanç',
+    'başarı', 'gerçek', 'toplum', 'devlet', 'millet', 'başkan', 'miktar', 'derece', 'rüzgar', 'hayvan',
+    'tavşan', 'trafik', 'karpuz', 'insanı', 'günlük', 'çantam', 'kapıya', 'yarına', 'kışlık', 'gözlük',
+    'bahane', 'yağmur', 'koltuk', 'defter', 'yorgun', 'sessiz', 'akıllı', 'renkli', 'sürücü', 'dolmuş',
+    'otobüs', 'çekici', 'yardım', 'sorunu', 'konusu', 'varlık', 'kuralı', 'aralık', 'üretim', 'durumu',
+    'kişiye', 'parası', 'işleri', 'gözler', 'elleri', 'sözlük', 'makine', 'kamera', 'resmen', 'sistem',
+    'bölümü', 'zengin'
+  ]
+};
+
+function normalizeLingoWord(value) {
+  return value.toLocaleUpperCase('tr-TR');
+}
+
+function getInitialLingoState(wordLength = 5, keepScores = false, prev) {
+  const answers = LINGO_WORDS[wordLength] || LINGO_WORDS[5];
+  const answer = normalizeLingoWord(answers[Math.floor(Math.random() * answers.length)]);
+  return {
+    gameId: 'lingo',
+    wordLength,
+    answer,
+    guesses: [],
+    currentTurn: 'player1',
+    turnDeadline: Date.now() + LINGO_TURN_MS,
+    winner: null,
+    player1: keepScores && prev ? prev.player1 : null,
+    player2: keepScores && prev ? prev.player2 : null,
+    score1: keepScores && prev ? (prev.score1 || 0) : 0,
+    score2: keepScores && prev ? (prev.score2 || 0) : 0
+  };
+}
 
 function getInitialGameState(keepScores = false, prev) {
   return {
@@ -152,16 +210,61 @@ function checkWinner(board) {
   return board.includes(null) ? null : 'draw';
 }
 
-function createGameById(gameId, keepScores = false, prev, forcePlacement = false) {
+function createGameById(gameId, keepScores = false, prev, forcePlacement = false, wordLength = 5) {
   if (gameId === 'battleship') return getInitialBattleshipState(keepScores, prev, forcePlacement);
   if (gameId === 'chess') return getInitialChessState(keepScores, prev);
+  if (gameId === 'lingo') return getInitialLingoState(wordLength, keepScores, prev);
   return getInitialGameState(keepScores, prev);
+}
+
+function publicLingoState(game) {
+  const { answer, ...state } = game;
+  return { ...state, answer: game.winner ? answer : null };
+}
+
+function clearLingoTimer(roomId) {
+  const timer = lingoTimers.get(roomId);
+  if (timer) clearTimeout(timer);
+  lingoTimers.delete(roomId);
+}
+
+function scheduleLingoTurn(roomId) {
+  clearLingoTimer(roomId);
+  const game = gameState.get(roomId);
+  if (!game || game.gameId !== 'lingo' || game.winner || !game.player1 || !game.player2) return;
+  const delay = Math.max(0, game.turnDeadline - Date.now());
+  const timer = setTimeout(() => {
+    if (gameState.get(roomId) !== game || game.winner) return;
+    if (game.turnDeadline > Date.now()) {
+      scheduleLingoTurn(roomId);
+      return;
+    }
+    advanceLingoTurn(roomId, true);
+  }, delay);
+  lingoTimers.set(roomId, timer);
+}
+
+function advanceLingoTurn(roomId, timedOut = false) {
+  const game = gameState.get(roomId);
+  if (!game || game.gameId !== 'lingo' || game.winner) return;
+  if (timedOut) game.guesses.push({ player: game.currentTurn, guess: '', feedback: [], timedOut: true });
+  if (game.guesses.length >= LINGO_MAX_GUESSES) {
+    game.winner = 'draw';
+    game.turnDeadline = null;
+  } else {
+    game.currentTurn = game.currentTurn === 'player1' ? 'player2' : 'player1';
+    game.turnDeadline = Date.now() + LINGO_TURN_MS;
+  }
+  emitGameState(roomId);
+  scheduleLingoTurn(roomId);
 }
 
 function emitGameState(roomId) {
   const game = gameState.get(roomId);
   if (!game) return;
-  const payload = game.gameId === 'chess' ? publicChessState(game) : { ...game };
+  const payload = game.gameId === 'chess'
+    ? publicChessState(game)
+    : game.gameId === 'lingo' ? publicLingoState(game) : { ...game };
   io.to(roomId).emit('game-state', payload);
 }
 
@@ -171,6 +274,7 @@ function getTableList() {
     .map(([roomId, room]) => ({
       roomId,
       gameId: room.gameId,
+      wordLength: room.wordLength,
       hostName: io.sockets.sockets.get(room.userOrder[0])?.displayName || 'Oyuncu',
       opponentName: room.userOrder[1]
         ? io.sockets.sockets.get(room.userOrder[1])?.displayName || 'Oyuncu'
@@ -210,9 +314,11 @@ function removeSocketFromRoom(socket) {
     room.users.delete(socket.id);
     room.userOrder = room.userOrder.filter(id => id !== socket.id);
     if (room.users.size === 0) {
+      clearLingoTimer(roomId);
       rooms.delete(roomId);
       gameState.delete(roomId);
     } else if (room.isTable) {
+      clearLingoTimer(roomId);
       const hostId = room.userOrder[0];
       room.pendingGame = {
         gameId: room.gameId,
@@ -225,7 +331,8 @@ function removeSocketFromRoom(socket) {
     } else {
       const game = gameState.get(roomId);
       if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
-        gameState.set(roomId, createGameById(game.gameId));
+        clearLingoTimer(roomId);
+        gameState.set(roomId, createGameById(game.gameId, false, undefined, false, game.wordLength));
         delete room.pendingGame;
         io.to(roomId).emit('game-pending-cleared');
         emitGameState(roomId);
@@ -256,7 +363,7 @@ io.on('connection', (socket) => {
     socket.emit('table-list', getTableList());
   });
 
-  socket.on('table-create', (gameId) => {
+  socket.on('table-create', (selection) => {
     if (!socket.displayName) {
       socket.emit('table-error', 'Önce adını girip lobiye katıl.');
       return;
@@ -265,7 +372,10 @@ io.on('connection', (socket) => {
       socket.emit('table-error', 'Yeni masa açmadan önce bulunduğun masadan ayrıl.');
       return;
     }
-    if (!['tictactoe', 'battleship', 'chess'].includes(gameId)) {
+    const gameId = typeof selection === 'string' ? selection : selection?.gameId;
+    const requestedLength = selection && typeof selection === 'object' ? Number(selection.wordLength) : 5;
+    const wordLength = [4, 5, 6].includes(requestedLength) ? requestedLength : 5;
+    if (!['tictactoe', 'battleship', 'chess', 'lingo'].includes(gameId)) {
       socket.emit('table-error', 'Bu oyun türü kullanılamıyor.');
       return;
     }
@@ -277,9 +387,10 @@ io.on('connection', (socket) => {
     const room = {
       isTable: true,
       gameId,
+      wordLength,
       users: new Set(),
       userOrder: [],
-      pendingGame: { gameId, player1: socket.id, playerName: socket.displayName }
+      pendingGame: { gameId, wordLength, player1: socket.id, playerName: socket.displayName }
     };
     rooms.set(roomId, room);
     addSocketToRoom(socket, roomId, room);
@@ -307,10 +418,11 @@ io.on('connection', (socket) => {
     const { gameId, player1 } = room.pendingGame;
     addSocketToRoom(socket, roomId, room);
     delete room.pendingGame;
-    const game = createGameById(gameId);
+    const game = createGameById(gameId, false, undefined, false, room.wordLength);
     game.player1 = player1;
     game.player2 = socket.id;
     gameState.set(roomId, game);
+    if (game.gameId === 'lingo') scheduleLingoTurn(roomId);
 
     socket.emit('table-joined', { roomId, gameId });
     io.to(roomId).emit('game-pending-cleared');
@@ -339,7 +451,9 @@ io.on('connection', (socket) => {
 
     const game = gameState.get(roomId);
     if (game?.player1 && game?.player2) {
-      socket.emit('game-state', game.gameId === 'chess' ? publicChessState(game) : game);
+      socket.emit('game-state', game.gameId === 'chess'
+        ? publicChessState(game)
+        : game.gameId === 'lingo' ? publicLingoState(game) : game);
     }
     if (room.pendingGame) {
       io.to(roomId).emit('game-pending', room.pendingGame);
@@ -360,14 +474,17 @@ io.on('connection', (socket) => {
     socket.to(to).emit('ice-candidate', { from: socket.id, candidate });
   });
 
-  socket.on('game-select', (gameId) => {
+  socket.on('game-select', (selection) => {
+    const gameId = typeof selection === 'string' ? selection : selection?.gameId;
+    const requestedLength = selection && typeof selection === 'object' ? Number(selection.wordLength) : 5;
+    const wordLength = [4, 5, 6].includes(requestedLength) ? requestedLength : 5;
     if (!socket.roomId || !gameId) return;
-    if (!['tictactoe', 'battleship', 'chess'].includes(gameId)) return;
+    if (!['tictactoe', 'battleship', 'chess', 'lingo'].includes(gameId)) return;
     const room = rooms.get(socket.roomId);
     const game = gameState.get(socket.roomId);
     if (!room || (game?.player1 && game?.player2)) return;
     if (room.pendingGame && room.pendingGame.player1 !== socket.id) return;
-    room.pendingGame = { gameId, player1: socket.id };
+    room.pendingGame = { gameId, wordLength, player1: socket.id };
     io.to(socket.roomId).emit('game-pending', room.pendingGame);
   });
 
@@ -377,13 +494,14 @@ io.on('connection', (socket) => {
     const game = gameState.get(socket.roomId);
     if (!room?.pendingGame || room.pendingGame.gameId !== gameId) return;
     if (room.pendingGame.player1 === socket.id) return;
-    const player1 = room.pendingGame.player1;
+    const { player1, wordLength } = room.pendingGame;
     delete room.pendingGame;
-    const g = createGameById(gameId);
+    const g = createGameById(gameId, false, undefined, false, wordLength);
     g.player1 = player1;
     g.player2 = socket.id;
     if (gameId === 'battleship') g.phase = 'placement';
     gameState.set(socket.roomId, g);
+    if (g.gameId === 'lingo') scheduleLingoTurn(socket.roomId);
     io.to(socket.roomId).emit('game-pending-cleared');
     emitGameState(socket.roomId);
   });
@@ -483,13 +601,56 @@ io.on('connection', (socket) => {
     io.to(socket.roomId).emit('game-state', { ...game });
   });
 
+  socket.on('game-lingo-guess', (rawGuess) => {
+    if (!socket.roomId || typeof rawGuess !== 'string') return;
+    const game = gameState.get(socket.roomId);
+    if (!game || game.gameId !== 'lingo' || game.winner || game.turnDeadline <= Date.now()) return;
+    if (game.currentTurn === 'player1' ? game.player1 !== socket.id : game.player2 !== socket.id) return;
+
+    const guess = normalizeLingoWord(rawGuess.trim());
+    if ([...guess].length !== game.wordLength || !/^[A-ZÇĞİÖŞÜ]+$/u.test(guess)) return;
+    const answerLetters = [...game.answer];
+    const guessLetters = [...guess];
+    const feedback = Array(game.wordLength).fill('absent');
+    const remaining = new Map();
+
+    answerLetters.forEach((letter, index) => {
+      if (guessLetters[index] === letter) feedback[index] = 'correct';
+      else remaining.set(letter, (remaining.get(letter) || 0) + 1);
+    });
+    guessLetters.forEach((letter, index) => {
+      if (feedback[index] === 'correct') return;
+      const count = remaining.get(letter) || 0;
+      if (count > 0) {
+        feedback[index] = 'present';
+        remaining.set(letter, count - 1);
+      }
+    });
+
+    game.guesses.push({ player: game.currentTurn, guess, feedback, timedOut: false });
+    if (guess === game.answer) {
+      game.winner = game.currentTurn;
+      game[game.currentTurn === 'player1' ? 'score1' : 'score2'] += 1;
+      game.turnDeadline = null;
+    } else if (game.guesses.length >= LINGO_MAX_GUESSES) {
+      game.winner = 'draw';
+      game.turnDeadline = null;
+    } else {
+      game.currentTurn = game.currentTurn === 'player1' ? 'player2' : 'player1';
+      game.turnDeadline = Date.now() + LINGO_TURN_MS;
+    }
+    emitGameState(socket.roomId);
+    scheduleLingoTurn(socket.roomId);
+  });
+
   const resetGameInRoom = (roomId) => {
     const prev = gameState.get(roomId);
-    const g = createGameById(prev?.gameId, true, prev, true);
+    const g = createGameById(prev?.gameId, true, prev, true, prev?.wordLength);
     g.player1 = prev?.player1 ?? null;
     g.player2 = prev?.player2 ?? null;
     gameState.set(roomId, g);
     emitGameState(roomId);
+    if (g.gameId === 'lingo') scheduleLingoTurn(roomId);
   };
 
   socket.on('game-reset-request', () => {
