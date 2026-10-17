@@ -35,6 +35,7 @@ const { getInitialChessState, publicChessState, tryChessMove } = require('./game
 const ticTacToe = require('./games/tictactoe');
 const battleship = require('./games/battleship');
 const lingo = require('./games/lingo');
+const memory = require('./games/memory');
 
 // Statik dosyalar (ön yüz)
 app.use(express.static(CLIENT_DIR));
@@ -50,17 +51,20 @@ const rooms = new Map();
 // Oyun durumu: { roomId: { board, currentTurn, winner, player1, player2 } }
 const gameState = new Map();
 const lingoTimers = new Map();
+const memoryTimers = new Map();
 
 function createGameById(gameId, {
   keepScores = false,
   previous,
   forcePlacement = false,
   wordLength = 5,
+  boardSize = '4x5',
   startingPlayer = 'player1'
 } = {}) {
   if (gameId === 'battleship') return battleship.getInitialState(keepScores, previous, forcePlacement, startingPlayer);
   if (gameId === 'chess') return getInitialChessState(keepScores, previous, startingPlayer);
   if (gameId === 'lingo') return lingo.getInitialState(wordLength, keepScores, previous, startingPlayer);
+  if (gameId === 'memory') return memory.getInitialState(boardSize, keepScores, previous, startingPlayer);
   return ticTacToe.getInitialState(keepScores, previous, startingPlayer);
 }
 
@@ -68,6 +72,12 @@ function clearLingoTimer(roomId) {
   const timer = lingoTimers.get(roomId);
   if (timer) clearTimeout(timer);
   lingoTimers.delete(roomId);
+}
+
+function clearMemoryTimer(roomId) {
+  const timer = memoryTimers.get(roomId);
+  if (timer) clearTimeout(timer);
+  memoryTimers.delete(roomId);
 }
 
 function scheduleLingoTurn(roomId) {
@@ -98,7 +108,8 @@ function emitGameState(roomId) {
   if (!game) return;
   const payload = game.gameId === 'chess'
     ? publicChessState(game)
-    : game.gameId === 'lingo' ? lingo.publicState(game) : { ...game };
+    : game.gameId === 'lingo' ? lingo.publicState(game)
+      : game.gameId === 'memory' ? memory.publicState(game) : { ...game };
   io.to(roomId).emit('game-state', payload);
 }
 
@@ -109,6 +120,7 @@ function getTableList() {
       roomId,
       gameId: room.gameId,
       wordLength: room.wordLength,
+      boardSize: room.boardSize,
       hostName: io.sockets.sockets.get(room.userOrder[0])?.displayName || 'Oyuncu',
       opponentName: room.userOrder[1]
         ? io.sockets.sockets.get(room.userOrder[1])?.displayName || 'Oyuncu'
@@ -149,10 +161,12 @@ function removeSocketFromRoom(socket) {
     room.userOrder = room.userOrder.filter(id => id !== socket.id);
     if (room.users.size === 0) {
       clearLingoTimer(roomId);
+      clearMemoryTimer(roomId);
       rooms.delete(roomId);
       gameState.delete(roomId);
     } else if (room.isTable) {
       clearLingoTimer(roomId);
+      clearMemoryTimer(roomId);
       const hostId = room.userOrder[0];
       room.pendingGame = {
         gameId: room.gameId,
@@ -166,7 +180,11 @@ function removeSocketFromRoom(socket) {
       const game = gameState.get(roomId);
       if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
         clearLingoTimer(roomId);
-        gameState.set(roomId, createGameById(game.gameId, { wordLength: game.wordLength }));
+        clearMemoryTimer(roomId);
+        gameState.set(roomId, createGameById(game.gameId, {
+          wordLength: game.wordLength,
+          boardSize: game.boardSize
+        }));
         delete room.pendingGame;
         io.to(roomId).emit('game-pending-cleared');
         emitGameState(roomId);
@@ -218,7 +236,9 @@ io.on('connection', (socket) => {
     const gameId = typeof selection === 'string' ? selection : selection?.gameId;
     const requestedLength = selection && typeof selection === 'object' ? Number(selection.wordLength) : 5;
     const wordLength = [4, 5, 6].includes(requestedLength) ? requestedLength : 5;
-    if (!['tictactoe', 'battleship', 'chess', 'lingo'].includes(gameId)) {
+    const requestedBoardSize = selection && typeof selection === 'object' ? selection.boardSize : '4x5';
+    const boardSize = ['4x5', '5x6'].includes(requestedBoardSize) ? requestedBoardSize : '4x5';
+    if (!['tictactoe', 'battleship', 'chess', 'lingo', 'memory'].includes(gameId)) {
       socket.emit('table-error', 'Bu oyun türü kullanılamıyor.');
       return;
     }
@@ -231,9 +251,10 @@ io.on('connection', (socket) => {
       isTable: true,
       gameId,
       wordLength,
+      boardSize,
       users: new Set(),
       userOrder: [],
-      pendingGame: { gameId, wordLength, player1: socket.id, playerName: socket.displayName }
+      pendingGame: { gameId, wordLength, boardSize, player1: socket.id, playerName: socket.displayName }
     };
     rooms.set(roomId, room);
     addSocketToRoom(socket, roomId, room);
@@ -261,7 +282,10 @@ io.on('connection', (socket) => {
     const { gameId, player1 } = room.pendingGame;
     addSocketToRoom(socket, roomId, room);
     delete room.pendingGame;
-    const game = createGameById(gameId, { wordLength: room.wordLength });
+    const game = createGameById(gameId, {
+      wordLength: room.wordLength,
+      boardSize: room.boardSize
+    });
     game.player1 = player1;
     game.player2 = socket.id;
     gameState.set(roomId, game);
@@ -296,7 +320,8 @@ io.on('connection', (socket) => {
     if (game?.player1 && game?.player2) {
       socket.emit('game-state', game.gameId === 'chess'
         ? publicChessState(game)
-        : game.gameId === 'lingo' ? lingo.publicState(game) : game);
+        : game.gameId === 'lingo' ? lingo.publicState(game)
+          : game.gameId === 'memory' ? memory.publicState(game) : game);
     }
     if (room.pendingGame) {
       io.to(roomId).emit('game-pending', room.pendingGame);
@@ -321,13 +346,15 @@ io.on('connection', (socket) => {
     const gameId = typeof selection === 'string' ? selection : selection?.gameId;
     const requestedLength = selection && typeof selection === 'object' ? Number(selection.wordLength) : 5;
     const wordLength = [4, 5, 6].includes(requestedLength) ? requestedLength : 5;
+    const requestedBoardSize = selection && typeof selection === 'object' ? selection.boardSize : '4x5';
+    const boardSize = ['4x5', '5x6'].includes(requestedBoardSize) ? requestedBoardSize : '4x5';
     if (!socket.roomId || !gameId) return;
-    if (!['tictactoe', 'battleship', 'chess', 'lingo'].includes(gameId)) return;
+    if (!['tictactoe', 'battleship', 'chess', 'lingo', 'memory'].includes(gameId)) return;
     const room = rooms.get(socket.roomId);
     const game = gameState.get(socket.roomId);
     if (!room || (game?.player1 && game?.player2)) return;
     if (room.pendingGame && room.pendingGame.player1 !== socket.id) return;
-    room.pendingGame = { gameId, wordLength, player1: socket.id };
+    room.pendingGame = { gameId, wordLength, boardSize, player1: socket.id };
     io.to(socket.roomId).emit('game-pending', room.pendingGame);
   });
 
@@ -337,9 +364,9 @@ io.on('connection', (socket) => {
     const game = gameState.get(socket.roomId);
     if (!room?.pendingGame || room.pendingGame.gameId !== gameId) return;
     if (room.pendingGame.player1 === socket.id) return;
-    const { player1, wordLength } = room.pendingGame;
+    const { player1, wordLength, boardSize } = room.pendingGame;
     delete room.pendingGame;
-    const g = createGameById(gameId, { wordLength });
+    const g = createGameById(gameId, { wordLength, boardSize });
     g.player1 = player1;
     g.player2 = socket.id;
     if (gameId === 'battleship') g.phase = 'placement';
@@ -395,14 +422,36 @@ io.on('connection', (socket) => {
     scheduleLingoTurn(socket.roomId);
   });
 
+  socket.on('game-memory-flip', (rawIndex) => {
+    const index = Number(rawIndex);
+    if (!socket.roomId || !Number.isInteger(index)) return;
+    const game = gameState.get(socket.roomId);
+    const result = memory.flipCard(game, socket.id, index);
+    if (!result) return;
+    emitGameState(socket.roomId);
+    if (result === 'mismatch') {
+      const roomId = socket.roomId;
+      clearMemoryTimer(roomId);
+      const timer = setTimeout(() => {
+        if (gameState.get(roomId) !== game) return;
+        memory.resolveMismatch(game);
+        memoryTimers.delete(roomId);
+        emitGameState(roomId);
+      }, memory.MISMATCH_DELAY_MS);
+      memoryTimers.set(roomId, timer);
+    }
+  });
+
   const resetGameInRoom = (roomId) => {
     const prev = gameState.get(roomId);
     const startingPlayer = prev?.startingPlayer === 'player2' ? 'player1' : 'player2';
+    clearMemoryTimer(roomId);
     const g = createGameById(prev?.gameId, {
       keepScores: true,
       previous: prev,
       forcePlacement: true,
       wordLength: prev?.wordLength,
+      boardSize: prev?.boardSize,
       startingPlayer
     });
     g.player1 = prev?.player1 ?? null;

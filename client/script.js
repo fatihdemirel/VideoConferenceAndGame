@@ -78,6 +78,11 @@ const chessStatus = document.getElementById('chessStatus');
 const chessResetBtn = document.getElementById('chessResetBtn');
 const chessPromo = document.getElementById('chessPromo');
 const gameActiveLingo = document.getElementById('gameActiveLingo');
+const gameActiveMemory = document.getElementById('gameActiveMemory');
+const memoryBoard = document.getElementById('memoryBoard');
+const memoryStatus = document.getElementById('memoryStatus');
+const memoryScore = document.getElementById('memoryScore');
+const memoryResetBtn = document.getElementById('memoryResetBtn');
 const lingoBoard = document.getElementById('lingoBoard');
 const lingoStatus = document.getElementById('lingoStatus');
 const lingoScore = document.getElementById('lingoScore');
@@ -87,6 +92,10 @@ const lingoGuessBtn = document.getElementById('lingoGuessBtn');
 const lingoResetBtn = document.getElementById('lingoResetBtn');
 const catalogLingoWordLength = document.getElementById('catalogLingoWordLength');
 const createLingoGameBtn = document.getElementById('createLingoGameBtn');
+const catalogMemorySize = document.getElementById('catalogMemorySize');
+const createMemoryGameBtn = document.getElementById('createMemoryGameBtn');
+const newTableMemorySize = document.getElementById('newTableMemorySize');
+const newTableMemorySizeLabel = document.getElementById('newTableMemorySizeLabel');
 const gameResetAcceptBtn = document.getElementById('gameResetAcceptBtn');
 const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
 
@@ -107,7 +116,7 @@ let isScreenSharing = false;
 let pendingGame = null; // { gameId, player1 }
 const audioAnalysers = {}; // participantId -> { context, analyser, source, animationId }
 
-const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç', lingo: 'Lingo' };
+const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç', lingo: 'Lingo', memory: 'Aynısını Bul' };
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' }
@@ -191,12 +200,13 @@ function renderTableList(tables) {
   tableList.replaceChildren();
   tableCount.textContent = `${tables.length} masa`;
   emptyTables.classList.toggle('hidden', tables.length > 0);
-  const icons = { chess: '♞', tictactoe: '✕', battleship: '⚓', lingo: '🔤' };
+  const icons = { chess: '♞', tictactoe: '✕', battleship: '⚓', lingo: '🔤', memory: '🧩' };
   const descriptions = {
     chess: 'Strateji · 2 oyuncu',
     tictactoe: 'Hızlı oyun · 2 oyuncu',
     battleship: 'Filo savaşı · 2 oyuncu',
-    lingo: 'Kelime tahmini · 2 oyuncu'
+    lingo: 'Kelime tahmini · 2 oyuncu',
+    memory: 'Hafıza eşleştirme · 2 oyuncu'
   };
 
   tables.forEach((table) => {
@@ -220,7 +230,9 @@ function renderTableList(tables) {
     meta.className = 'table-card-meta';
     const description = table.gameId === 'lingo'
       ? `Kelime tahmini · ${table.wordLength || 5} harf · 2 oyuncu`
-      : descriptions[table.gameId] || '2 oyuncu';
+      : table.gameId === 'memory'
+        ? `Hafıza eşleştirme · ${table.boardSize || '4x5'} · 2 oyuncu`
+        : descriptions[table.gameId] || '2 oyuncu';
     meta.textContent = `${description} · ${table.status === 'playing' ? 'Oyun sürüyor' : 'Rakip bekleniyor'}`;
     details.append(title, host, meta);
 
@@ -252,14 +264,18 @@ createTableBtn?.addEventListener('click', () => {
   createTableBtn.disabled = true;
   socket.emit('table-create', {
     gameId: newTableGame.value,
-    wordLength: Number(newTableWordLength?.value || 5)
+    wordLength: Number(newTableWordLength?.value || 5),
+    boardSize: newTableMemorySize?.value || '4x5'
   });
 });
 
 newTableGame?.addEventListener('change', () => {
   const isLingo = newTableGame.value === 'lingo';
+  const isMemory = newTableGame.value === 'memory';
   newTableWordLength?.classList.toggle('hidden', !isLingo);
   newTableWordLengthLabel?.classList.toggle('hidden', !isLingo);
+  newTableMemorySize?.classList.toggle('hidden', !isMemory);
+  newTableMemorySizeLabel?.classList.toggle('hidden', !isMemory);
 });
 
 socket.on('table-error', (message) => {
@@ -380,6 +396,7 @@ function showGameView(mode, gameId) {
   gameActiveBattleship?.classList.toggle('hidden', mode !== 'active' || gameId !== 'battleship');
   gameActiveChess?.classList.toggle('hidden', mode !== 'active' || gameId !== 'chess');
   gameActiveLingo?.classList.toggle('hidden', mode !== 'active' || gameId !== 'lingo');
+  gameActiveMemory?.classList.toggle('hidden', mode !== 'active' || gameId !== 'memory');
   gamePanel?.classList.toggle('game-panel-chess', mode === 'active' && gameId === 'chess');
 }
 
@@ -387,7 +404,8 @@ function isAnyGameActive() {
   return !gameActive?.classList.contains('hidden')
     || !gameActiveBattleship?.classList.contains('hidden')
     || !gameActiveChess?.classList.contains('hidden')
-    || !gameActiveLingo?.classList.contains('hidden');
+    || !gameActiveLingo?.classList.contains('hidden')
+    || !gameActiveMemory?.classList.contains('hidden');
 }
 
 document.querySelectorAll('.game-catalog-item')?.forEach((btn) => {
@@ -403,6 +421,14 @@ createLingoGameBtn?.addEventListener('click', () => {
   socket.emit('game-select', {
     gameId: 'lingo',
     wordLength: Number(catalogLingoWordLength?.value || 5)
+  });
+});
+
+createMemoryGameBtn?.addEventListener('click', () => {
+  if (!currentRoomId) return;
+  socket.emit('game-select', {
+    gameId: 'memory',
+    boardSize: catalogMemorySize?.value || '4x5'
   });
 });
 
@@ -448,6 +474,8 @@ socket.on('game-state', (state) => {
       renderChessState(state);
     } else if (gid === 'lingo') {
       renderLingoState(state);
+    } else if (gid === 'memory') {
+      renderMemoryState(state);
     } else {
       renderGameState(state);
     }
@@ -457,6 +485,7 @@ socket.on('game-state', (state) => {
     renderBattleshipState(null);
     renderChessState(null);
     renderLingoState(null);
+    renderMemoryState(null);
   }
 });
 
@@ -473,6 +502,10 @@ chessResetBtn?.addEventListener('click', () => {
 });
 
 lingoResetBtn?.addEventListener('click', () => {
+  if (currentRoomId) socket.emit('game-reset-request');
+});
+
+memoryResetBtn?.addEventListener('click', () => {
   if (currentRoomId) socket.emit('game-reset-request');
 });
 
@@ -493,14 +526,18 @@ socket.on('game-reset-request', () => {
 socket.on('game-reset-rejected', () => {
   const statusEl = !gameActiveChess?.classList.contains('hidden')
     ? chessStatus
-    : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
+    : !gameActiveMemory?.classList.contains('hidden')
+      ? memoryStatus
+      : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
   if (statusEl) statusEl.textContent = 'Rakip reddetti.';
 });
 
 socket.on('game-reset-accepted', () => {
   const statusEl = !gameActiveChess?.classList.contains('hidden')
     ? chessStatus
-    : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
+    : !gameActiveMemory?.classList.contains('hidden')
+      ? memoryStatus
+      : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
   if (statusEl) statusEl.textContent = 'Rakip kabul etti!';
 });
 
@@ -956,6 +993,7 @@ function leaveRoom() {
   renderGameState(null);
   renderBattleshipState(null);
   renderChessState(null);
+  renderMemoryState(null);
 
   if (currentRoomId) {
     socket.emit('leave-room');

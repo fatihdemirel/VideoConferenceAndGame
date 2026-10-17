@@ -50,12 +50,18 @@
               <option value="tictactoe">XOX</option>
               <option value="battleship">Amiral Battı</option>
               <option value="lingo">Lingo</option>
+              <option value="memory">Aynısını Bul</option>
             </select>
             <label id="newTableWordLengthLabel" class="visually-hidden hidden" for="newTableWordLength">Lingo kelime uzunluğu</label>
             <select id="newTableWordLength" class="hidden" aria-label="Lingo kelime uzunluğu">
               <option value="4">4 harf</option>
               <option value="5" selected>5 harf</option>
               <option value="6">6 harf</option>
+            </select>
+            <label id="newTableMemorySizeLabel" class="visually-hidden hidden" for="newTableMemorySize">Aynısını Bul tahta boyutu</label>
+            <select id="newTableMemorySize" class="hidden" aria-label="Aynısını Bul tahta boyutu">
+              <option value="4x5">4 × 5 (10 çift)</option>
+              <option value="5x6">5 × 6 (15 çift)</option>
             </select>
             <button id="createTableBtn" class="btn btn-primary" type="button">＋ Masa aç</button>
           </div>
@@ -124,6 +130,14 @@
               <button class="game-catalog-item" data-game="tictactoe">XOX</button>
               <button class="game-catalog-item" data-game="battleship">Amiral Battı</button>
               <button class="game-catalog-item" data-game="chess">Satranç</button>
+            </div>
+            <div class="memory-catalog-options">
+              <label for="catalogMemorySize">Aynısını Bul tahta boyutu</label>
+              <select id="catalogMemorySize">
+                <option value="4x5">4 × 5 · 10 çift</option>
+                <option value="5x6">5 × 6 · 15 çift</option>
+              </select>
+              <button id="createMemoryGameBtn" class="game-catalog-item" type="button">Aynısını Bul masası aç</button>
             </div>
             <div class="lingo-catalog-options">
               <label for="catalogLingoWordLength">Lingo kelime uzunluğu</label>
@@ -220,6 +234,15 @@
             <p class="lingo-hint">Yeşil: doğru harf ve yer · Sarı: kelimede var</p>
             <button id="lingoResetBtn" class="btn btn-icon game-reset-btn">Yeniden Başla</button>
           </div>
+          <div id="gameActiveMemory" class="game-active game-memory hidden">
+            <div class="game-header">
+              <h3>Aynısını Bul</h3>
+              <div id="memoryScore" class="game-score">0 — 0</div>
+              <span id="memoryStatus" class="game-status">Bekleniyor...</span>
+            </div>
+            <div id="memoryBoard" class="memory-board" aria-label="Eşleştirme kartları"></div>
+            <button id="memoryResetBtn" class="btn btn-icon game-reset-btn">Yeni oyun</button>
+          </div>
         </div>
         <aside class="connections-rail" aria-label="Bağlantılar">
           <div class="connections-header">Masa arkadaşların</div>
@@ -286,5 +309,6 @@
   <script src="games/battleship.js"></script>
   <script src="games/chess.js"></script>
   <script src="games/lingo.js"></script>
+  <script src="games/memory.js"></script>
 </body>
 </html>
