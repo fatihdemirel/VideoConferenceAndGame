@@ -789,6 +789,31 @@ body {
   font-size: 0.9rem;
 }
 
+.memory-catalog-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.memory-catalog-options select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-dark);
+  color: var(--text);
+  font: inherit;
+}
+
+.memory-catalog-options .game-catalog-item {
+  padding: 10px 16px;
+  font-size: 0.9rem;
+}
+
 /* Bekleme / Katıl */
 .game-pending {
   flex: 1;
@@ -879,6 +904,57 @@ body {
 .game-cell.winning {
   background: rgba(0, 186, 124, 0.2);
   border-color: #00ba7c;
+}
+
+.game-memory {
+  gap: 10px;
+}
+
+.memory-board {
+  --memory-columns: 5;
+  display: grid;
+  grid-template-columns: repeat(var(--memory-columns), minmax(0, 1fr));
+  gap: clamp(5px, 1vw, 10px);
+  width: min(100%, 620px);
+}
+
+.memory-card {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 2px solid #3e6a77;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #285967, #183b4a);
+  color: #f8f4e8;
+  font-size: clamp(1.4rem, 4vw, 2.6rem);
+  cursor: pointer;
+  transition: transform 0.16s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.memory-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.memory-card.is-revealed {
+  background: #f3ead4;
+  border-color: #d6a45e;
+  color: #24333d;
+  cursor: default;
+}
+
+.memory-card.is-matched {
+  background: rgba(0, 186, 124, 0.2);
+  border-color: #00ba7c;
+  color: white;
+  cursor: default;
+}
+
+.memory-card:disabled:not(.is-revealed):not(.is-matched) {
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 .game-lingo {
@@ -1419,6 +1495,16 @@ body {
     font-size: 0.9rem;
   }
 
+  .memory-board {
+    gap: 4px;
+  }
+
+  .memory-card {
+    border-radius: 8px;
+    border-width: 1px;
+    font-size: clamp(1rem, 7vw, 1.7rem);
+  }
+
   .game-battleship .battle-boards {
     flex-direction: column;
     gap: 12px;
@@ -1501,6 +1587,10 @@ body {
   .game-status,
   .game-score {
     font-size: 0.75rem;
+  }
+
+  .memory-board {
+    width: 100%;
   }
 
   .battle-placement-ship .btn-small {
