@@ -22,8 +22,12 @@ Oyuncuların adlarıyla katıldığı, açık oyun masalarını görüp yeni mas
 
 ```
 VideoConf/
-├── client/          # Ön yüz (HTML, CSS, JS)
-├── server/          # Arka yüz (Node.js signaling sunucusu)
+├── client/
+│   ├── games/       # Her oyunun arayüz ve etkileşim kodu
+│   └── ...          # Uygulama arayüzü (HTML, CSS, JS)
+├── server/
+│   ├── games/       # Tüm oyun kuralları (XOX, Amiral Battı, Satranç ve Lingo)
+│   └── server.js    # Signaling sunucusu ve oyun olayları
 ├── cert/            # HTTPS sertifika dosyaları (cert.pem, key.pem)
 ├── scripts/         # Yardımcı scriptler (sertifika oluşturma vb.)
 ├── package.json
@@ -116,6 +120,8 @@ Her masa iki oyuncu içindir. Masa sahibi oyunu seçer; ikinci oyuncu açık mas
 - **XOX:** Klasik üçe üç X-O oyunu; yeniden başlatma için rakip onayı gerekir.
 - **Amiral Battı:** Her oyuncu gemilerini yerleştirir, ardından sırayla ateş eder. Tüm düşman gemilerini batıran kazanır.
 - **Lingo:** Oyun açılırken 4, 5 veya 6 harf seçilir. Oyuncular yaygın Türkçe kelimeler arasından belirlenen aynı kelimeyi ekrandaki harf klavyesiyle sırayla, her turda 30 saniye içinde tahmin eder. Yeşil harf doğru yerde, sarı harf kelimede başka bir yerde bulunur; doğru konumdaki harfler sonraki tahmin satırında korunur.
+
+Yeni tur rakip onayıyla başlatıldığında ilk hamle/tahmin sırası oyuncular arasında değişir.
 
 ## Geliştirme
 

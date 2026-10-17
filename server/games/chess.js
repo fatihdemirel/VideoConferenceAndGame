@@ -343,22 +343,25 @@ function evaluateEnd(game) {
   return { winner: null, inCheck: check, legalMoves: legal };
 }
 
-function getInitialChessState(keepScores = false, prev) {
+function getInitialChessState(keepScores = false, prev, startingPlayer = 'player1') {
+  const currentTurn = startingPlayer === 'player2' ? 'b' : 'w';
+  const castle = { wK: true, wQ: true, bK: true, bQ: true };
   return {
     gameId: 'chess',
     board: START_BOARD.slice(),
-    currentTurn: 'w',
+    currentTurn,
+    startingPlayer,
     winner: null,
     inCheck: false,
     enPassant: null,
     halfmove: 0,
-    castle: { wK: true, wQ: true, bK: true, bQ: true },
+    castle,
     lastMove: null,
     legalMoves: generateLegalMoves({
       board: START_BOARD.slice(),
-      currentTurn: 'w',
+      currentTurn,
       enPassant: null,
-      castle: { wK: true, wQ: true, bK: true, bQ: true }
+      castle: { ...castle }
     }),
     player1: keepScores && prev ? prev.player1 : null,
     player2: keepScores && prev ? prev.player2 : null,
