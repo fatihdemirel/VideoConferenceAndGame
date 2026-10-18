@@ -16,10 +16,15 @@ const tableCount = document.getElementById('tableCount');
 const emptyTables = document.getElementById('emptyTables');
 const tableLobbyError = document.getElementById('tableLobbyError');
 const lobbyError = document.getElementById('lobbyError');
-const newTableGame = document.getElementById('newTableGame');
 const newTableWordLength = document.getElementById('newTableWordLength');
 const newTableWordLengthLabel = document.getElementById('newTableWordLengthLabel');
+const newTableMemorySize = document.getElementById('newTableMemorySize');
+const newTableMemorySizeLabel = document.getElementById('newTableMemorySizeLabel');
 const createTableBtn = document.getElementById('createTableBtn');
+const openCreateTableModalBtn = document.getElementById('openCreateTableModalBtn');
+const createTableModal = document.getElementById('createTableModal');
+const createTableModalError = document.getElementById('createTableModalError');
+const createTableOptions = document.getElementById('createTableOptions');
 const lobbyUserName = document.getElementById('lobbyUserName');
 const localDisplayName = document.getElementById('localDisplayName');
 const localVideoLabel = document.getElementById('localVideoLabel');
@@ -33,19 +38,18 @@ const participantCount = document.getElementById('participantCount');
 const leaveBtn = document.getElementById('leaveBtn');
 const toggleMuteBtn = document.getElementById('toggleMuteBtn');
 const toggleVideoBtn = document.getElementById('toggleVideoBtn');
-const screenShareBtn = document.getElementById('screenShareBtn');
 const permissionModal = document.getElementById('permissionModal');
 const permissionModalText = document.getElementById('permissionModalText');
 const permissionRetryBtn = document.getElementById('permissionRetryBtn');
 const permissionCloseBtn = document.getElementById('permissionCloseBtn');
 const chatToggleBtn = document.getElementById('chatToggleBtn');
 const chatPanel = document.getElementById('chatPanel');
+const chatPanelOverlay = document.getElementById('chatPanelOverlay');
 const chatCloseBtn = document.getElementById('chatCloseBtn');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const chatSendBtn = document.getElementById('chatSendBtn');
 const gamePanel = document.getElementById('gamePanel');
-const gameToggleBtn = document.getElementById('gameToggleBtn');
 const headerMenuBtn = document.getElementById('headerMenuBtn');
 const headerMenuOverlay = document.getElementById('headerMenuOverlay');
 const gameCatalog = document.getElementById('gameCatalog');
@@ -94,8 +98,6 @@ const catalogLingoWordLength = document.getElementById('catalogLingoWordLength')
 const createLingoGameBtn = document.getElementById('createLingoGameBtn');
 const catalogMemorySize = document.getElementById('catalogMemorySize');
 const createMemoryGameBtn = document.getElementById('createMemoryGameBtn');
-const newTableMemorySize = document.getElementById('newTableMemorySize');
-const newTableMemorySizeLabel = document.getElementById('newTableMemorySizeLabel');
 const gameResetAcceptBtn = document.getElementById('gameResetAcceptBtn');
 const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
 
@@ -112,7 +114,6 @@ let currentUserName = '';
 const participantNames = {};
 let isMuted = false;
 let isVideoOff = false;
-let isScreenSharing = false;
 let pendingGame = null; // { gameId, player1 }
 const audioAnalysers = {}; // participantId -> { context, analyser, source, animationId }
 
@@ -136,8 +137,6 @@ function enterTableRoom({ roomId, gameId }) {
   tableGameLabel.textContent = gameName;
   connectionStatus.textContent = 'Bağlanıyor...';
   connectionStatus.classList.remove('connected');
-  gamePanel?.classList.remove('game-panel-collapsed');
-  gamePanelOverlay?.classList.add('hidden');
   showGameView('pending');
   history.replaceState({}, '', window.location.pathname);
   updateMediaButtons();
@@ -214,18 +213,41 @@ function renderTableList(tables) {
     card.className = 'table-card';
 
     const gameIcon = document.createElement('span');
-    gameIcon.className = `table-card-icon ${table.gameId}`;
     gameIcon.textContent = icons[table.gameId] || '♟';
     gameIcon.setAttribute('aria-hidden', 'true');
 
-    const details = document.createElement('div');
-    details.className = 'table-card-details';
+    const scene = document.createElement('div');
+    scene.className = `table-scene ${table.gameId}`;
+    const surface = document.createElement('div');
+    surface.className = 'table-surface';
+    surface.append(gameIcon);
     const title = document.createElement('h3');
     title.textContent = GAME_NAMES[table.gameId] || 'Oyun';
-    const host = document.createElement('p');
-    host.textContent = table.opponentName
-      ? `${table.hostName} · ${table.opponentName}`
-      : `${table.hostName} masayı açtı`;
+    surface.append(title);
+
+    const seats = document.createElement('div');
+    seats.className = 'table-seats';
+    [table.hostName, table.opponentName].forEach((playerName, index) => {
+      const seat = document.createElement('div');
+      seat.className = `table-seat${playerName ? ' occupied' : ' empty'} ${index === 0 ? 'host-seat' : 'guest-seat'}`;
+      seat.setAttribute('aria-label', playerName ? `Dolu sandalye: ${playerName}` : 'Boş sandalye');
+
+      const chair = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      chair.setAttribute('viewBox', '0 0 24 24');
+      chair.setAttribute('aria-hidden', 'true');
+      chair.classList.add('chair-icon');
+      const chairPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      chairPath.setAttribute('d', 'M7 11V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6M5 12h14v4H5zM7 16v5m10-5v5');
+      chair.append(chairPath);
+
+      const name = document.createElement('span');
+      name.className = 'table-seat-name';
+      name.textContent = playerName || 'Boş';
+      seat.append(chair, name);
+      seats.appendChild(seat);
+    });
+    scene.append(seats, surface);
+
     const meta = document.createElement('span');
     meta.className = 'table-card-meta';
     const description = table.gameId === 'lingo'
@@ -233,8 +255,7 @@ function renderTableList(tables) {
       : table.gameId === 'memory'
         ? `Hafıza eşleştirme · ${table.boardSize || '4x5'} · 2 oyuncu`
         : descriptions[table.gameId] || '2 oyuncu';
-    meta.textContent = `${description} · ${table.status === 'playing' ? 'Oyun sürüyor' : 'Rakip bekleniyor'}`;
-    details.append(title, host, meta);
+    meta.textContent = `${description} · ${table.playerCount}/2 oyuncu`;
 
     const action = document.createElement('button');
     action.type = 'button';
@@ -248,114 +269,136 @@ function renderTableList(tables) {
       });
     }
 
-    const seats = document.createElement('span');
-    seats.className = 'table-seats';
-    seats.textContent = `${table.playerCount} / 2`;
-    card.append(gameIcon, details, seats, action);
+    card.append(scene, meta, action);
     tableList.appendChild(card);
   });
 }
 
 socket.on('table-list', renderTableList);
 
+let selectedNewTableGame = null;
+
+function closeCreateTableModal() {
+  createTableModal?.classList.add('hidden');
+  createTableModal?.setAttribute('aria-hidden', 'true');
+  openCreateTableModalBtn?.focus();
+}
+
+function selectNewTableGame(gameId) {
+  selectedNewTableGame = gameId;
+  document.querySelectorAll('.game-choice-card').forEach((card) => {
+    card.setAttribute('aria-pressed', String(card.dataset.game === gameId));
+  });
+
+  const isLingo = gameId === 'lingo';
+  const isMemory = gameId === 'memory';
+  createTableOptions?.classList.toggle('hidden', !isLingo && !isMemory);
+  newTableWordLength?.classList.toggle('hidden', !isLingo);
+  newTableWordLengthLabel?.classList.toggle('hidden', !isLingo);
+  newTableMemorySize?.classList.toggle('hidden', !isMemory);
+  newTableMemorySizeLabel?.classList.toggle('hidden', !isMemory);
+  createTableBtn.disabled = false;
+}
+
+openCreateTableModalBtn?.addEventListener('click', () => {
+  selectedNewTableGame = null;
+  createTableModalError?.classList.add('hidden');
+  createTableModal?.classList.remove('hidden');
+  createTableModal?.setAttribute('aria-hidden', 'false');
+  document.querySelectorAll('.game-choice-card').forEach((card) => card.setAttribute('aria-pressed', 'false'));
+  createTableOptions?.classList.add('hidden');
+  newTableWordLength?.classList.add('hidden');
+  newTableWordLengthLabel?.classList.add('hidden');
+  newTableMemorySize?.classList.add('hidden');
+  newTableMemorySizeLabel?.classList.add('hidden');
+  createTableBtn.disabled = true;
+  document.querySelector('.game-choice-card')?.focus();
+});
+
+document.querySelectorAll('.game-choice-card').forEach((card) => {
+  card.addEventListener('click', () => selectNewTableGame(card.dataset.game));
+});
+
+document.getElementById('closeCreateTableModalBtn')?.addEventListener('click', closeCreateTableModal);
+document.getElementById('cancelCreateTableBtn')?.addEventListener('click', closeCreateTableModal);
+createTableModal?.addEventListener('click', (event) => {
+  if (event.target === createTableModal) closeCreateTableModal();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !createTableModal?.classList.contains('hidden')) closeCreateTableModal();
+});
+
 createTableBtn?.addEventListener('click', () => {
-  if (!currentUserName) return;
-  tableLobbyError.classList.add('hidden');
+  if (!currentUserName || !selectedNewTableGame) return;
+  createTableModalError?.classList.add('hidden');
   createTableBtn.disabled = true;
   socket.emit('table-create', {
-    gameId: newTableGame.value,
+    gameId: selectedNewTableGame,
     wordLength: Number(newTableWordLength?.value || 5),
     boardSize: newTableMemorySize?.value || '4x5'
   });
 });
 
-newTableGame?.addEventListener('change', () => {
-  const isLingo = newTableGame.value === 'lingo';
-  const isMemory = newTableGame.value === 'memory';
-  newTableWordLength?.classList.toggle('hidden', !isLingo);
-  newTableWordLengthLabel?.classList.toggle('hidden', !isLingo);
-  newTableMemorySize?.classList.toggle('hidden', !isMemory);
-  newTableMemorySizeLabel?.classList.toggle('hidden', !isMemory);
-});
-
 socket.on('table-error', (message) => {
-  tableLobbyError.textContent = message;
-  tableLobbyError.classList.remove('hidden');
+  if (createTableModal && !createTableModal.classList.contains('hidden')) {
+    createTableModalError.textContent = message;
+    createTableModalError.classList.remove('hidden');
+  } else {
+    tableLobbyError.textContent = message;
+    tableLobbyError.classList.remove('hidden');
+  }
   createTableBtn.disabled = false;
 });
 
 socket.on('table-joined', (data) => {
   createTableBtn.disabled = false;
+  closeCreateTableModal();
   enterTableRoom(data);
-});
-
-const gamePanelOverlay = document.getElementById('gamePanelOverlay');
-
-// Oyun paneli aç/kapa
-function toggleGamePanel() {
-  gamePanel?.classList.toggle('game-panel-collapsed');
-  if (gamePanelOverlay) {
-    gamePanelOverlay.classList.toggle('hidden', gamePanel?.classList.contains('game-panel-collapsed'));
-  }
-}
-
-gameToggleBtn?.addEventListener('click', toggleGamePanel);
-
-gamePanelOverlay?.addEventListener('click', () => {
-  gamePanel?.classList.add('game-panel-collapsed');
-  gamePanelOverlay?.classList.add('hidden');
 });
 
 // Hamburger menü
 function openHeaderMenu() {
   headerMenuOverlay?.classList.remove('hidden');
+  headerMenuBtn?.setAttribute('aria-expanded', 'true');
 }
 
 function closeHeaderMenu() {
   headerMenuOverlay?.classList.add('hidden');
+  headerMenuBtn?.setAttribute('aria-expanded', 'false');
 }
 
 headerMenuBtn?.addEventListener('click', (e) => {
   e.stopPropagation();
-  headerMenuOverlay?.classList.toggle('hidden');
+  if (headerMenuOverlay?.classList.contains('hidden')) {
+    openHeaderMenu();
+  } else {
+    closeHeaderMenu();
+  }
 });
 
 headerMenuOverlay?.addEventListener('click', (e) => {
   if (e.target === headerMenuOverlay) closeHeaderMenu();
 });
 
-document.getElementById('gameToggleBtnMenu')?.addEventListener('click', () => {
-  toggleGamePanel();
-  closeHeaderMenu();
-});
-document.getElementById('chatToggleBtnMenu')?.addEventListener('click', () => {
-  chatToggleBtn?.click();
-  closeHeaderMenu();
-});
-document.getElementById('screenShareBtnMenu')?.addEventListener('click', () => {
-  screenShareBtn?.click();
-  closeHeaderMenu();
-});
-document.getElementById('toggleMuteBtnMenu')?.addEventListener('click', () => {
-  toggleMuteBtn?.click();
-  closeHeaderMenu();
-});
-document.getElementById('toggleVideoBtnMenu')?.addEventListener('click', () => {
-  toggleVideoBtn?.click();
-  closeHeaderMenu();
-});
-document.getElementById('leaveBtnMenu')?.addEventListener('click', () => {
-  leaveBtn?.click();
-  closeHeaderMenu();
-});
-
 // Chat panel
-chatToggleBtn.addEventListener('click', () => {
-  chatPanel.classList.toggle('hidden');
+function setChatOpen(isOpen) {
+  chatPanel?.classList.toggle('is-open', isOpen);
+  chatPanel?.setAttribute('aria-hidden', String(!isOpen));
+  chatPanelOverlay?.classList.toggle('hidden', !isOpen);
+  chatToggleBtn?.setAttribute('aria-expanded', String(isOpen));
+  chatToggleBtn?.setAttribute('aria-label', isOpen ? 'Sohbeti kapat' : 'Sohbeti aç');
+  if (isOpen) chatInput?.focus();
+}
+
+chatToggleBtn?.addEventListener('click', () => {
+  setChatOpen(!chatPanel?.classList.contains('is-open'));
+  closeHeaderMenu();
 });
 
-chatCloseBtn.addEventListener('click', () => {
-  chatPanel.classList.add('hidden');
+chatCloseBtn?.addEventListener('click', () => setChatOpen(false));
+chatPanelOverlay?.addEventListener('click', () => setChatOpen(false));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && chatPanel?.classList.contains('is-open')) setChatOpen(false);
 });
 
 function addChatMessage(from, message, isOwn = false) {
@@ -982,11 +1025,9 @@ function leaveRoom() {
   Object.keys(participantNames).forEach(id => delete participantNames[id]);
 
   if (chatMessages) chatMessages.innerHTML = '';
-  if (chatPanel) chatPanel.classList.add('hidden');
+  setChatOpen(false);
   if (gameResetModal) gameResetModal.classList.add('hidden');
   closeHeaderMenu();
-  gamePanel?.classList.add('game-panel-collapsed');
-  gamePanelOverlay?.classList.add('hidden');
   pendingGame = null;
   renderLingoState(null);
   showGameView('catalog');
@@ -1021,18 +1062,18 @@ function updateLocalVideoPlaceholder() {
 function updateMediaButtons() {
   const hasAudio = localStream?.getAudioTracks().length > 0;
   const hasVideo = localStream?.getVideoTracks().length > 0;
-  const muteIconEl = document.getElementById('muteIcon');
-  const videoIconEl = document.getElementById('videoIcon');
-  const muteIconMenuEl = document.getElementById('muteIconMenu');
-  const videoIconMenuEl = document.getElementById('videoIconMenu');
-  const muteIcon = !hasAudio ? '🔇' : (isMuted ? '🔇' : '🎤');
-  const videoIcon = !hasVideo ? '📷' : (isVideoOff ? '📷' : '📹');
-  if (muteIconEl) muteIconEl.textContent = muteIcon;
-  if (muteIconMenuEl) muteIconMenuEl.textContent = muteIcon;
-  if (videoIconEl) videoIconEl.textContent = videoIcon;
-  if (videoIconMenuEl) videoIconMenuEl.textContent = videoIcon;
-  if (toggleMuteBtn) toggleMuteBtn.title = !hasAudio ? 'Mikrofonu aç' : (isMuted ? 'Sesi aç' : 'Sesi kapat');
-  if (toggleVideoBtn) toggleVideoBtn.title = !hasVideo ? 'Kamerayı aç' : (isVideoOff ? 'Kamerayı aç' : 'Kamerayı kapat');
+  const muteIsOff = !hasAudio || isMuted;
+  const videoIsOff = !hasVideo || isVideoOff;
+  const muteLabel = muteIsOff ? 'Mikrofonu aç' : 'Mikrofonu kapat';
+  const videoLabel = videoIsOff ? 'Kamerayı aç' : 'Kamerayı kapat';
+  toggleMuteBtn?.classList.toggle('is-off', muteIsOff);
+  toggleMuteBtn?.setAttribute('aria-pressed', String(!muteIsOff));
+  toggleMuteBtn?.setAttribute('aria-label', muteLabel);
+  if (toggleMuteBtn) toggleMuteBtn.title = muteLabel;
+  toggleVideoBtn?.classList.toggle('is-off', videoIsOff);
+  toggleVideoBtn?.setAttribute('aria-pressed', String(!videoIsOff));
+  toggleVideoBtn?.setAttribute('aria-label', videoLabel);
+  if (toggleVideoBtn) toggleVideoBtn.title = videoLabel;
   updateLocalVideoPlaceholder();
 }
 
@@ -1167,6 +1208,7 @@ toggleMuteBtn.addEventListener('click', () => {
     promise.then(async (stream) => {
       const track = stream.getAudioTracks()[0];
       localStream.addTrack(track);
+      isMuted = false;
       await addTrackToPeerConnections(track, localStream);
       setupAudioLevelDetection('local', localStream);
       updateMediaButtons();
@@ -1191,6 +1233,7 @@ toggleVideoBtn.addEventListener('click', () => {
     promise.then(async (stream) => {
       const track = stream.getVideoTracks()[0];
       localStream.addTrack(track);
+      isVideoOff = false;
       await addTrackToPeerConnections(track, localStream);
       updateMediaButtons();
       updateLocalVideoPlaceholder();
@@ -1216,48 +1259,4 @@ toggleVideoBtn.addEventListener('click', () => {
   }
   updateMediaButtons();
   updateLocalVideoPlaceholder();
-});
-
-// Ekran paylaşımı
-screenShareBtn.addEventListener('click', async () => {
-  try {
-    if (isScreenSharing) {
-      const screenTrack = localStream?.getVideoTracks().find(t => t.label.includes('screen'));
-      if (screenTrack) {
-        screenTrack.stop();
-        try {
-          const videoTrack = await navigator.mediaDevices.getUserMedia({ video: true }).then(s => s.getVideoTracks()[0]);
-          localStream.addTrack(videoTrack);
-          Object.values(peerConnections).forEach(pc => {
-            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (sender) sender.replaceTrack(videoTrack);
-          });
-        } catch (_) {}
-        updateMediaButtons();
-      }
-      isScreenSharing = false;
-      screenShareBtn.title = 'Ekran paylaş';
-    } else {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      const screenTrack = screenStream.getVideoTracks()[0];
-      const oldTrack = localStream?.getVideoTracks()[0];
-      if (oldTrack) {
-        localStream.removeTrack(oldTrack);
-        oldTrack.stop();
-      }
-      localStream.addTrack(screenTrack);
-
-      Object.values(peerConnections).forEach(pc => {
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) sender.replaceTrack(screenTrack);
-        else pc.addTrack(screenTrack, localStream);
-      });
-
-      screenTrack.onended = () => screenShareBtn.click();
-      isScreenSharing = true;
-      screenShareBtn.title = 'Ekran paylaşımını durdur';
-    }
-  } catch (err) {
-    console.error('Ekran paylaşım hatası:', err);
-  }
 });
