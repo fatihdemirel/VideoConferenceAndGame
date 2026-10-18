@@ -5,7 +5,6 @@ Oyuncuların adlarıyla katıldığı, açık oyun masalarını görüp yeni mas
 ## Özellikler
 
 - 🎥 Gerçek zamanlı video ve ses
-- 🖥️ Ekran paylaşımı
 - 🎤 Mikrofon aç/kapa
 - 📹 Kamera aç/kapa
 - 🎲 Canlı oyun lobisi ve açık masa listesi

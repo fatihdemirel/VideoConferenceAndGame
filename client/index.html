@@ -32,53 +32,75 @@
         </div>
       </header>
       <main class="table-lobby-content">
-        <div class="lobby-intro">
-          <span class="eyebrow">OYUN LOBİSİ</span>
-          <h1>Bir masaya çekil.</h1>
-          <p>Bir oyun seçip kendi masanı kur veya açık masalardan birine katıl.</p>
-        </div>
-        <section class="create-table-card" aria-labelledby="createTableHeading">
-          <div class="create-table-copy">
-            <span class="eyebrow">KENDİ MASAN</span>
-            <h2 id="createTableHeading">Yeni masa aç</h2>
-            <p>Oyunu seç, rakibin gelince oyun başlasın.</p>
-          </div>
-          <div class="create-table-actions">
-            <label class="visually-hidden" for="newTableGame">Oyun türü</label>
-            <select id="newTableGame">
-              <option value="chess">Satranç</option>
-              <option value="tictactoe">XOX</option>
-              <option value="battleship">Amiral Battı</option>
-              <option value="lingo">Lingo</option>
-              <option value="memory">Aynısını Bul</option>
-            </select>
-            <label id="newTableWordLengthLabel" class="visually-hidden hidden" for="newTableWordLength">Lingo kelime uzunluğu</label>
-            <select id="newTableWordLength" class="hidden" aria-label="Lingo kelime uzunluğu">
-              <option value="4">4 harf</option>
-              <option value="5" selected>5 harf</option>
-              <option value="6">6 harf</option>
-            </select>
-            <label id="newTableMemorySizeLabel" class="visually-hidden hidden" for="newTableMemorySize">Aynısını Bul tahta boyutu</label>
-            <select id="newTableMemorySize" class="hidden" aria-label="Aynısını Bul tahta boyutu">
-              <option value="4x5">4 × 5 (10 çift)</option>
-              <option value="5x6">5 × 6 (15 çift)</option>
-            </select>
-            <button id="createTableBtn" class="btn btn-primary" type="button">＋ Masa aç</button>
-          </div>
-        </section>
         <section class="open-tables-section" aria-labelledby="openTablesHeading">
           <div class="open-tables-heading">
             <div>
               <span class="eyebrow">CANLI LOBİ</span>
               <h2 id="openTablesHeading">Oyun masaları</h2>
             </div>
-            <span id="tableCount" class="table-count">0 masa</span>
+            <div class="open-tables-actions">
+              <span id="tableCount" class="table-count">0 masa</span>
+              <button id="openCreateTableModalBtn" class="btn create-table-action-btn" type="button">
+                <span class="create-table-plus" aria-hidden="true">+</span>
+                <span>Masa aç</span>
+              </button>
+            </div>
           </div>
           <div id="tableList" class="table-list" aria-live="polite"></div>
           <p id="emptyTables" class="empty-tables">Şu an masa yok. İlk masayı sen kur!</p>
           <p id="tableLobbyError" class="lobby-error hidden" role="alert"></p>
         </section>
       </main>
+      <div id="createTableModal" class="create-table-modal hidden" aria-hidden="true">
+        <section class="create-table-dialog" role="dialog" aria-modal="true" aria-labelledby="createTableModalTitle">
+          <div class="create-table-dialog-header">
+            <div>
+              <span class="eyebrow">YENİ MASA</span>
+              <h2 id="createTableModalTitle">Bir oyun seç</h2>
+              <p>Masanın türünü seçip oyuna hazırla.</p>
+            </div>
+            <button id="closeCreateTableModalBtn" class="btn btn-icon" type="button" aria-label="Pencereyi kapat">✕</button>
+          </div>
+          <div class="game-choice-list" role="group" aria-label="Oyun türü">
+            <button class="game-choice-card" type="button" data-game="chess" aria-pressed="false">
+              <span aria-hidden="true">♞</span><strong>Satranç</strong><small>Strateji ve planlama</small>
+            </button>
+            <button class="game-choice-card" type="button" data-game="tictactoe" aria-pressed="false">
+              <span aria-hidden="true">✕</span><strong>XOX</strong><small>Hızlı ve eğlenceli</small>
+            </button>
+            <button class="game-choice-card" type="button" data-game="battleship" aria-pressed="false">
+              <span aria-hidden="true">⚓</span><strong>Amiral Battı</strong><small>Filo savaşı</small>
+            </button>
+            <button class="game-choice-card" type="button" data-game="lingo" aria-pressed="false">
+              <span aria-hidden="true">🔤</span><strong>Lingo</strong><small>Kelime tahmini</small>
+            </button>
+            <button class="game-choice-card" type="button" data-game="memory" aria-pressed="false">
+              <span aria-hidden="true">🧩</span><strong>Aynısını Bul</strong><small>Hafıza eşleştirme</small>
+            </button>
+          </div>
+          <div id="createTableOptions" class="create-table-options hidden">
+            <label id="newTableWordLengthLabel" class="hidden" for="newTableWordLength">Lingo kelime uzunluğu</label>
+            <select id="newTableWordLength" class="hidden" aria-label="Lingo kelime uzunluğu">
+              <option value="4">4 harf</option>
+              <option value="5" selected>5 harf</option>
+              <option value="6">6 harf</option>
+            </select>
+            <label id="newTableMemorySizeLabel" class="hidden" for="newTableMemorySize">Aynısını Bul tahta boyutu</label>
+            <select id="newTableMemorySize" class="hidden" aria-label="Aynısını Bul tahta boyutu">
+              <option value="4x5">4 × 5 (10 çift)</option>
+              <option value="5x6">5 × 6 (15 çift)</option>
+            </select>
+          </div>
+          <p id="createTableModalError" class="lobby-error hidden" role="alert"></p>
+          <div class="create-table-dialog-actions">
+            <button id="cancelCreateTableBtn" class="btn btn-icon" type="button">İptal</button>
+            <button id="createTableBtn" class="btn create-table-action-btn" type="button" disabled>
+              <span class="create-table-plus" aria-hidden="true">+</span>
+              <span>Masa aç</span>
+            </button>
+          </div>
+        </section>
+      </div>
     </section>
 
     <div id="conference" class="conference hidden">
@@ -87,39 +109,19 @@
           <h2 id="roomTitle">Oyun masası</h2>
           <span id="tableGameLabel" class="table-game-label"></span>
         </div>
-        <div class="header-actions">
-          <button id="gameToggleBtn" class="btn btn-icon" title="Oyunlar">
-            <span>🎮</span>
-          </button>
-          <button id="chatToggleBtn" class="btn btn-icon" title="Sohbet">
-            <span>💬</span>
-          </button>
-          <button id="screenShareBtn" class="btn btn-icon" title="Ekran paylaş">
-            <span>🖥️</span>
-          </button>
-          <button id="toggleMuteBtn" class="btn btn-icon" title="Mikrofon">
-            <span id="muteIcon">🎤</span>
-          </button>
-          <button id="toggleVideoBtn" class="btn btn-icon" title="Kamera">
-            <span id="videoIcon">📹</span>
-          </button>
-          <button id="leaveBtn" class="btn btn-danger">Lobiye dön</button>
-        </div>
-        <button id="headerMenuBtn" class="btn btn-icon header-menu-btn" title="Menü" aria-label="Menü">
+        <button id="headerMenuBtn" class="btn btn-icon header-menu-btn" type="button" title="Menü" aria-label="Menü" aria-expanded="false" aria-controls="headerMenuOverlay">
           <span class="hamburger-icon">☰</span>
         </button>
       </div>
       <div id="headerMenuOverlay" class="header-menu-overlay hidden">
         <div class="header-menu-dropdown">
-          <button id="gameToggleBtnMenu" class="btn btn-icon header-menu-item" title="Oyunlar">🎮 Oyunlar</button>
-          <button id="chatToggleBtnMenu" class="btn btn-icon header-menu-item" title="Sohbet">💬 Sohbet</button>
-          <button id="screenShareBtnMenu" class="btn btn-icon header-menu-item" title="Ekran paylaş">🖥️ Ekran paylaş</button>
-          <button id="toggleMuteBtnMenu" class="btn btn-icon header-menu-item" title="Mikrofon"><span id="muteIconMenu">🎤</span> Mikrofon</button>
-          <button id="toggleVideoBtnMenu" class="btn btn-icon header-menu-item" title="Kamera"><span id="videoIconMenu">📹</span> Kamera</button>
-          <button id="leaveBtnMenu" class="btn btn-danger header-menu-item">Lobiye dön</button>
+          <button id="chatToggleBtn" class="btn header-menu-item chat-menu-item" type="button" title="Sohbet" aria-label="Sohbeti aç" aria-expanded="false" aria-controls="chatPanel">
+            <span aria-hidden="true">💬</span>
+            <span>Sohbet</span>
+          </button>
+          <button id="leaveBtn" class="btn btn-danger header-menu-item">Lobiye dön</button>
         </div>
       </div>
-      <div id="gamePanelOverlay" class="game-panel-overlay hidden"></div>
       <div class="conference-main">
         <!-- Oyun – solda büyük alan -->
         <div id="gamePanel" class="game-panel">
@@ -253,17 +255,36 @@
                 <span class="placeholder-initial" id="localInitial">?</span>
                 <span class="placeholder-name" id="localDisplayName">Oyuncu</span>
               </div>
-              <div class="video-label" id="localVideoLabel">Sen</div>
+              <div class="local-video-footer">
+                <div class="video-label" id="localVideoLabel">Sen</div>
+                <div class="local-media-controls" aria-label="Kamera ve mikrofon kontrolleri">
+                  <button id="toggleMuteBtn" class="btn btn-icon media-control" type="button" title="Mikrofonu aç" aria-label="Mikrofonu aç" aria-pressed="false">
+                    <svg id="muteIcon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"></path>
+                      <path d="M19 11a7 7 0 0 1-14 0M12 18v4m-4 0h8"></path>
+                      <path class="media-off-slash" d="m4 4 16 16"></path>
+                    </svg>
+                  </button>
+                  <button id="toggleVideoBtn" class="btn btn-icon media-control" type="button" title="Kamerayı aç" aria-label="Kamerayı aç" aria-pressed="false">
+                    <svg id="videoIcon" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="3" y="6" width="13" height="12" rx="2"></rect>
+                      <path d="m16 10 5-3v10l-5-3z"></path>
+                      <path class="media-off-slash" d="m4 4 16 16"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
             <div id="remoteVideos" class="remote-videos"></div>
           </div>
         </aside>
 
       <!-- Chat panel -->
-      <div id="chatPanel" class="chat-panel hidden">
+      <div id="chatPanelOverlay" class="chat-panel-overlay hidden"></div>
+      <div id="chatPanel" class="chat-panel" aria-label="Sohbet" aria-hidden="true">
         <div class="chat-header">
           <h3>Sohbet</h3>
-          <button id="chatCloseBtn" class="btn btn-icon" title="Kapat">✕</button>
+          <button id="chatCloseBtn" class="btn btn-icon" type="button" title="Kapat" aria-label="Sohbeti kapat">✕</button>
         </div>
         <div id="chatMessages" class="chat-messages"></div>
         <div class="chat-input-row">
