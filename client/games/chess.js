@@ -69,6 +69,7 @@ function createChessPiece(piece) {
 function renderChessState(state) {
   const previousState = chessState;
   chessState = state;
+  renderGameClocks(state);
   chessPendingPromo = null;
   chessPromo?.classList.add('hidden');
   if (!chessBoard || !chessStatus) return;
@@ -97,7 +98,8 @@ function renderChessState(state) {
   else if (state.winner === 'w' || state.winner === 'b') {
     const iWon = (state.winner === 'w' && side === 'w') || (state.winner === 'b' && side === 'b');
     const mate = state.inCheck;
-    if (mate) status = iWon ? 'Şah mat! Kazandın!' : 'Şah mat! Kaybettin!';
+    if (state.endReason === 'timeout') status = iWon ? 'Süre rakibinde bitti. Kazandın!' : 'Süren doldu. Kaybettin!';
+    else if (mate) status = iWon ? 'Şah mat! Kazandın!' : 'Şah mat! Kaybettin!';
     else status = iWon ? 'Kazandın!' : 'Kaybettin!';
   } else if (side) {
     const checkText = state.inCheck ? ' Şah!' : '';

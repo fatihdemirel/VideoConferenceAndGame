@@ -420,6 +420,35 @@ body {
   color: #c4c9c9;
 }
 
+.create-table-clock-options,
+.game-clock-options {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  color: #c4c9c9;
+  font-size: 0.88rem;
+}
+
+.create-table-clock-options {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.create-table-clock-options select,
+.game-clock-options select {
+  min-width: 140px;
+  padding: 9px 11px;
+  border: 1px solid #444a50;
+  border-radius: 9px;
+  background: #171c21;
+  color: #f1eee8;
+  font: inherit;
+}
+
 .create-table-options.hidden {
   display: none;
 }
@@ -1167,6 +1196,45 @@ body {
   color: var(--text-muted);
   min-height: 1.4em;
   display: block;
+}
+
+.game-clocks {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.game-clock {
+  display: flex;
+  min-width: 108px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.game-clock time {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.game-clock.is-active {
+  border-color: #d6a45e;
+  background: rgba(214, 164, 94, 0.15);
+  color: #f0d29d;
+}
+
+.game-clock.is-low time {
+  color: #ff938e;
 }
 
 .game-board {
@@ -2292,6 +2360,504 @@ body {
 
   .chess-board {
     width: min(82vw, 62vh, 700px);
+  }
+}
+
+.game-backgammon {
+  width: 100%;
+  max-width: 100%;
+  align-items: center;
+  gap: clamp(6px, 1vh, 16px);
+}
+
+.backgammon-board-frame {
+  width: min(100%, 1160px, 110vh);
+  max-width: 100%;
+  padding: clamp(6px, 1.2vw, 14px);
+  border: 7px solid #503019;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(4deg, transparent 0 12px, rgba(255, 215, 160, 0.035) 13px, transparent 15px),
+    linear-gradient(135deg, #96643a, #6b4428 52%, #93613a);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5), inset 0 0 0 2px rgba(231, 193, 139, 0.25);
+}
+
+.backgammon-player-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 25px;
+  padding: 0 4px 6px;
+  color: #f0d7ad;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.backgammon-player-line small {
+  color: #d4b58b;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.backgammon-board-layout {
+  display: grid;
+  grid-template-columns: clamp(32px, 6vw, 68px) minmax(0, 1fr) clamp(32px, 6vw, 68px);
+  min-width: 0;
+  align-items: stretch;
+  gap: clamp(3px, 0.8vw, 8px);
+}
+
+.backgammon-board-layout.player2-perspective {
+  transform: rotateX(180deg);
+}
+
+.backgammon-board-layout.player2-perspective .backgammon-off-tray,
+.backgammon-board-layout.player2-perspective .backgammon-checkers,
+.backgammon-board-layout.player2-perspective .backgammon-bar-checkers {
+  transform: rotateX(180deg);
+}
+
+.backgammon-board-layout.player2-perspective .backgammon-controls {
+  transform: translate(-50%, -50%) rotateX(180deg);
+}
+
+.backgammon-board-layout.player2-perspective .backgammon-die {
+  transform: rotate(var(--die-rotation, -4deg));
+}
+
+.backgammon-board-layout.player2-perspective .backgammon-die.is-used {
+  transform: scale(0.88) rotate(var(--die-rotation, -4deg));
+}
+
+.backgammon-board-surface {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  aspect-ratio: 1.48 / 1;
+  overflow: hidden;
+  border: 3px solid #4b2e19;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #573820, #8b5e37 50%, #573820);
+  box-shadow: inset 0 0 0 1px rgba(248, 216, 168, 0.2);
+}
+
+.backgammon-board-surface::before {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: clamp(28px, 5%, 48px);
+  background: linear-gradient(90deg, #382315, #5b3922 48%, #382315);
+  box-shadow: inset 1px 0 rgba(255, 229, 190, 0.15), inset -1px 0 rgba(31, 18, 10, 0.5);
+  content: '';
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.backgammon-points {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) clamp(28px, 5%, 48px) repeat(6, minmax(0, 1fr));
+  gap: 2px 0;
+  overflow: hidden;
+  background: linear-gradient(90deg, #7a5232 0 49%, #402a1a 49.5% 50.5%, #7a5232 51%);
+}
+
+.backgammon-point {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  grid-row: 1;
+  height: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  appearance: none;
+}
+
+.backgammon-point::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 86%;
+  background: linear-gradient(90deg, #dfb16d, #bf8749);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  content: '';
+}
+
+.backgammon-point.dark-point::before {
+  background: linear-gradient(90deg, #71462b, #402618);
+}
+
+.backgammon-point.lower-point {
+  justify-content: flex-end;
+}
+
+.backgammon-point.lower-point::before {
+  inset: auto 0 0;
+  clip-path: polygon(0 100%, 100% 100%, 50% 0);
+}
+
+.backgammon-point.is-source,
+.backgammon-bar-seat.is-source {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 3px #f0cb79;
+}
+
+.backgammon-point.is-selected {
+  box-shadow: inset 0 0 0 4px #fff1bd;
+}
+
+.backgammon-point.is-destination {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 3px rgba(117, 218, 153, 0.9);
+}
+
+.backgammon-checkers {
+  z-index: 1;
+  display: flex;
+  width: 94%;
+  align-items: center;
+  flex-direction: column;
+}
+
+.lower-point .backgammon-checkers {
+  flex-direction: column-reverse;
+}
+
+.backgammon-checker {
+  display: block;
+  width: min(88%, 31px);
+  flex: 0 0 auto;
+  aspect-ratio: 1;
+  margin: -2px 0;
+  border: 2px solid #5a3d27;
+  border-radius: 50%;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 2px 2px rgba(255, 255, 255, 0.58), inset 0 -2px 2px rgba(75, 49, 24, 0.26);
+}
+
+.backgammon-checker.player1 {
+  background: radial-gradient(circle at 35% 28%, #fff7df, #d9bd8a 72%);
+}
+
+.backgammon-checker.player2 {
+  border-color: #26180f;
+  background: radial-gradient(circle at 35% 28%, #885c38, #392316 74%);
+}
+
+.backgammon-checker-count {
+  z-index: 2;
+  margin-top: -1.2rem;
+  padding: 1px 4px;
+  border: 1px solid rgba(255, 241, 211, 0.56);
+  border-radius: 999px;
+  background: rgba(35, 23, 14, 0.84);
+  color: #fff5e0;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.backgammon-bar-seat {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  display: flex;
+  width: clamp(20px, 3.4vw, 34px);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #382315, #4e301b 48%, #382315);
+  color: inherit;
+  cursor: default;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.backgammon-bar-seat.player2 {
+  top: 0;
+  height: 50%;
+}
+
+.backgammon-bar-seat.player1 {
+  bottom: 0;
+  height: 50%;
+}
+
+.backgammon-bar-seat.is-source {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 2px #f0cb79;
+}
+
+.backgammon-bar-seat.has-checkers {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.backgammon-bar-checkers {
+  display: flex;
+  max-height: 100%;
+  align-items: center;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.backgammon-checker.bar-checker {
+  width: clamp(17px, 2.5vw, 25px);
+  margin: -5px 0;
+}
+
+.backgammon-checker.bar-checker:first-child {
+  margin-top: 0;
+}
+
+.backgammon-off-tray {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 225, 185, 0.3);
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(47, 29, 17, 0.48), rgba(159, 107, 59, 0.56), rgba(47, 29, 17, 0.48));
+  box-shadow: inset 0 0 0 2px rgba(43, 25, 13, 0.32);
+}
+
+.backgammon-tray-label {
+  color: #ead0a9;
+  font-size: 0.57rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+.backgammon-off-checkers {
+  display: flex;
+  max-height: 75%;
+  align-items: center;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.backgammon-checker.off-checker {
+  width: clamp(17px, 2.5vw, 26px);
+  margin: -8px 0;
+}
+
+.backgammon-checker.off-checker:first-child {
+  margin-top: 0;
+}
+
+.backgammon-controls {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  display: none;
+  width: max-content;
+  max-width: calc(100% - 12px);
+  grid-template-columns: 36px auto 36px;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid rgba(255, 225, 185, 0.36);
+  border-radius: 10px;
+  background: rgba(57, 35, 21, 0.94);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.48), inset 0 1px 1px rgba(255, 232, 197, 0.16);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.backgammon-controls.has-dice,
+.backgammon-controls.can-roll {
+  display: grid;
+  pointer-events: none;
+}
+
+.backgammon-control-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.backgammon-die-slot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.backgammon-die-slot:first-child {
+  justify-content: flex-end;
+}
+
+.backgammon-die-slot:last-child {
+  justify-content: flex-start;
+}
+
+.backgammon-die-slot .backgammon-die {
+  width: clamp(28px, 3.5vw, 40px);
+}
+
+.backgammon-checker-moving {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+}
+
+.backgammon-controls .chess-promo-btn {
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: clamp(0.65rem, 1.1vw, 0.78rem);
+  pointer-events: auto;
+}
+
+.backgammon-die {
+  display: grid;
+  width: clamp(42px, 6vw, 58px);
+  aspect-ratio: 1;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  padding: 8px;
+  border: 1px solid #fff5df;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fffdf3 0%, #f0dfbc 72%, #ddc79d 100%);
+  box-shadow: 0 5px 9px rgba(32, 19, 9, 0.52), inset 0 2px 3px #fff, inset 0 -2px 3px rgba(108, 72, 36, 0.22);
+  transform: rotate(var(--die-rotation, -4deg));
+}
+
+.backgammon-die:nth-child(even) {
+  --die-rotation: 5deg;
+}
+
+.backgammon-die-pip {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #65452b, #2a1b11 75%);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3), 0 1px 1px rgba(255, 255, 255, 0.55);
+}
+
+.backgammon-die.is-used {
+  opacity: 0.5;
+  filter: saturate(0.55);
+  transform: scale(0.88) rotate(var(--die-rotation, -4deg));
+}
+
+@media (max-width: 520px) {
+  .backgammon-board-frame {
+    padding: 5px;
+    border-width: 4px;
+  }
+
+  .backgammon-board-layout {
+    grid-template-columns: clamp(22px, 7vw, 28px) minmax(0, 1fr) clamp(22px, 7vw, 28px);
+    gap: 3px;
+  }
+
+  .backgammon-points {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) 24px repeat(6, minmax(0, 1fr));
+  }
+
+  .backgammon-board-surface::before {
+    width: 24px;
+  }
+
+  .backgammon-point {
+    min-height: 0;
+  }
+
+  .backgammon-checker.bar-checker {
+    width: 16px;
+    margin: -4px 0;
+  }
+
+  .backgammon-controls {
+    grid-template-columns: 30px auto 30px;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 7px;
+  }
+
+  .backgammon-controls .chess-promo-btn {
+    min-height: 28px;
+    padding: 4px 6px;
+    font-size: 0.64rem;
+  }
+
+  .backgammon-die-slot .backgammon-die {
+    width: 28px;
+    padding: 4px;
+    border-radius: 6px;
+  }
+
+  .backgammon-tray-label {
+    font-size: 0.48rem;
+  }
+}
+
+@media (max-height: 600px) and (min-width: 521px) {
+  .game-panel {
+    padding: 4px 12px;
+  }
+
+  .game-backgammon {
+    gap: 4px;
+  }
+
+  .game-backgammon .game-header {
+    margin-bottom: 0;
+  }
+
+  .game-backgammon .game-reset-btn {
+    min-height: 32px;
+    margin-top: 0;
+    padding: 5px 10px;
+  }
+
+  .backgammon-board-frame {
+    width: min(100%, 64vh);
+    padding: 4px;
+    border-width: 4px;
+  }
+
+  .backgammon-player-line {
+    min-height: 18px;
+    padding-bottom: 2px;
+    font-size: 0.65rem;
+  }
+
+  .backgammon-board-layout {
+    grid-template-columns: clamp(24px, 5vw, 36px) minmax(0, 1fr) clamp(24px, 5vw, 36px);
+  }
+}
+
+@supports (height: 100dvh) {
+  .backgammon-board-frame {
+    width: min(100%, 1160px, 110dvh);
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-height: 600px) and (min-width: 521px) {
+    .backgammon-board-frame {
+      width: min(100%, 64dvh);
+    }
   }
 }
 

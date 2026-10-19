@@ -65,6 +65,9 @@
             <button class="game-choice-card" type="button" data-game="chess" aria-pressed="false">
               <span aria-hidden="true">♞</span><strong>Satranç</strong><small>Strateji ve planlama</small>
             </button>
+            <button class="game-choice-card" type="button" data-game="backgammon" aria-pressed="false">
+              <span aria-hidden="true">⚄</span><strong>Tavla</strong><small>Zar ve strateji</small>
+            </button>
             <button class="game-choice-card" type="button" data-game="tictactoe" aria-pressed="false">
               <span aria-hidden="true">✕</span><strong>XOX</strong><small>Hızlı ve eğlenceli</small>
             </button>
@@ -89,6 +92,15 @@
             <select id="newTableMemorySize" class="hidden" aria-label="Aynısını Bul tahta boyutu">
               <option value="4x5">4 × 5 (10 çift)</option>
               <option value="5x6">5 × 6 (15 çift)</option>
+            </select>
+          </div>
+          <div id="createTableClockOptions" class="create-table-clock-options hidden">
+            <label for="newTableClockMinutes">Oyun süresi</label>
+            <select id="newTableClockMinutes" aria-label="Oyun süresi">
+              <option value="0">Süresiz</option>
+              <option value="5">5 dakika</option>
+              <option value="10">10 dakika</option>
+              <option value="15">15 dakika</option>
             </select>
           </div>
           <p id="createTableModalError" class="lobby-error hidden" role="alert"></p>
@@ -132,6 +144,16 @@
               <button class="game-catalog-item" data-game="tictactoe">XOX</button>
               <button class="game-catalog-item" data-game="battleship">Amiral Battı</button>
               <button class="game-catalog-item" data-game="chess">Satranç</button>
+              <button class="game-catalog-item" data-game="backgammon">Tavla</button>
+            </div>
+            <div class="game-clock-options">
+              <label for="catalogClockMinutes">Satranç / tavla süresi</label>
+              <select id="catalogClockMinutes">
+                <option value="0">Süresiz</option>
+                <option value="5">5 dakika</option>
+                <option value="10">10 dakika</option>
+                <option value="15">15 dakika</option>
+              </select>
             </div>
             <div class="memory-catalog-options">
               <label for="catalogMemorySize">Aynısını Bul tahta boyutu</label>
@@ -211,6 +233,10 @@
               <h3>Satranç</h3>
               <div id="chessScore" class="game-score">Beyaz: 0 — Siyah: 0</div>
               <span id="chessStatus" class="game-status">Bekleniyor...</span>
+              <div id="chessClocks" class="game-clocks hidden" aria-label="Oyun saatleri">
+                <div class="game-clock" data-clock-player="player1"><span>Beyaz</span><time>--:--</time></div>
+                <div class="game-clock" data-clock-player="player2"><span>Siyah</span><time>--:--</time></div>
+              </div>
             </div>
             <div id="chessBoard" class="chess-board"></div>
             <div id="chessPromo" class="chess-promo hidden">
@@ -221,6 +247,55 @@
               <button type="button" class="chess-promo-btn" data-promo="N">At</button>
             </div>
             <button id="chessResetBtn" class="btn btn-icon game-reset-btn">Yeniden Başla</button>
+          </div>
+          <!-- Aktif oyun: Tavla -->
+          <div id="gameActiveBackgammon" class="game-active game-backgammon hidden">
+            <div class="game-header">
+              <h3>Tavla</h3>
+              <div id="backgammonScore" class="game-score">0 — 0</div>
+              <span id="backgammonStatus" class="game-status">Bekleniyor...</span>
+              <div id="backgammonClocks" class="game-clocks hidden" aria-label="Oyun saatleri">
+                <div class="game-clock" data-clock-player="player1"><span>Krem</span><time>--:--</time></div>
+                <div class="game-clock" data-clock-player="player2"><span>Kahverengi</span><time>--:--</time></div>
+              </div>
+            </div>
+            <div class="backgammon-board-frame">
+              <div class="backgammon-player-line">
+                <span id="backgammonTopPlayer">Kahverengi <small>(Oyuncu 2)</small></span>
+              </div>
+                <div class="backgammon-board-layout">
+                  <aside class="backgammon-off-tray player2" aria-label="Kahverengi toplanan pullar">
+                    <span class="backgammon-tray-label">Toplanan</span>
+                  <div id="backgammonOffPlayer2" class="backgammon-off-checkers"></div>
+                </aside>
+                <div class="backgammon-board-surface">
+                  <button id="backgammonBarPlayer2" class="backgammon-bar-seat player2" type="button" data-bg-source="bar" data-player="player2" aria-label="Kahverengi kırık pulları">
+                    <span class="backgammon-bar-checkers" aria-hidden="true"></span>
+                  </button>
+                  <div id="backgammonTopPoints" class="backgammon-points upper" aria-label="Tavla üst hanesi"></div>
+                  <div id="backgammonBottomPoints" class="backgammon-points lower" aria-label="Tavla alt hanesi"></div>
+                  <button id="backgammonBarPlayer1" class="backgammon-bar-seat player1" type="button" data-bg-source="bar" data-player="player1" aria-label="Krem kırık pulları">
+                    <span class="backgammon-bar-checkers" aria-hidden="true"></span>
+                  </button>
+                  <div class="backgammon-controls">
+                    <div id="backgammonDiceLeft" class="backgammon-die-slot" aria-label="Sol zar"></div>
+                    <div class="backgammon-control-buttons">
+                      <button id="backgammonRollBtn" class="btn chess-promo-btn" type="button">Zarları at</button>
+                      <button id="backgammonBearOffBtn" class="btn chess-promo-btn hidden" type="button" data-bg-destination="off">Pul çıkar</button>
+                    </div>
+                    <div id="backgammonDiceRight" class="backgammon-die-slot" aria-label="Sağ zar"></div>
+                  </div>
+                </div>
+                <aside class="backgammon-off-tray player1" aria-label="Krem toplanan pullar">
+                  <span class="backgammon-tray-label">Toplanan</span>
+                  <div id="backgammonOffPlayer1" class="backgammon-off-checkers"></div>
+                </aside>
+              </div>
+              <div class="backgammon-player-line">
+                <span id="backgammonBottomPlayer">Krem <small>(Oyuncu 1)</small></span>
+              </div>
+            </div>
+            <button id="backgammonResetBtn" class="btn btn-icon game-reset-btn">Yeniden Başla</button>
           </div>
           <!-- Aktif oyun: Lingo -->
           <div id="gameActiveLingo" class="game-active game-lingo hidden">
@@ -329,6 +404,7 @@
   <script src="games/tictactoe.js"></script>
   <script src="games/battleship.js"></script>
   <script src="games/chess.js"></script>
+  <script src="games/backgammon.js"></script>
   <script src="games/lingo.js"></script>
   <script src="games/memory.js"></script>
 </body>

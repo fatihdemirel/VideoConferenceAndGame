@@ -20,6 +20,8 @@ const newTableWordLength = document.getElementById('newTableWordLength');
 const newTableWordLengthLabel = document.getElementById('newTableWordLengthLabel');
 const newTableMemorySize = document.getElementById('newTableMemorySize');
 const newTableMemorySizeLabel = document.getElementById('newTableMemorySizeLabel');
+const newTableClockMinutes = document.getElementById('newTableClockMinutes');
+const createTableClockOptions = document.getElementById('createTableClockOptions');
 const createTableBtn = document.getElementById('createTableBtn');
 const openCreateTableModalBtn = document.getElementById('openCreateTableModalBtn');
 const createTableModal = document.getElementById('createTableModal');
@@ -98,6 +100,11 @@ const catalogLingoWordLength = document.getElementById('catalogLingoWordLength')
 const createLingoGameBtn = document.getElementById('createLingoGameBtn');
 const catalogMemorySize = document.getElementById('catalogMemorySize');
 const createMemoryGameBtn = document.getElementById('createMemoryGameBtn');
+const catalogClockMinutes = document.getElementById('catalogClockMinutes');
+const gameActiveBackgammon = document.getElementById('gameActiveBackgammon');
+const backgammonResetBtn = document.getElementById('backgammonResetBtn');
+const backgammonRollBtn = document.getElementById('backgammonRollBtn');
+const backgammonStateRoot = document.getElementById('gameActiveBackgammon');
 const gameResetAcceptBtn = document.getElementById('gameResetAcceptBtn');
 const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
 
@@ -115,13 +122,49 @@ const participantNames = {};
 let isMuted = false;
 let isVideoOff = false;
 let pendingGame = null; // { gameId, player1 }
+let activeClockState = null;
 const audioAnalysers = {}; // participantId -> { context, analyser, source, animationId }
 
-const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç', lingo: 'Lingo', memory: 'Aynısını Bul' };
+const GAME_NAMES = { tictactoe: 'XOX', battleship: 'Amiral Battı', chess: 'Satranç', backgammon: 'Tavla', lingo: 'Lingo', memory: 'Aynısını Bul' };
 const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' }
 ];
+
+function formatClockTime(milliseconds) {
+  const totalSeconds = Math.ceil(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function renderGameClocks(state) {
+  activeClockState = state;
+  updateGameClockDisplays();
+}
+
+function updateGameClockDisplays() {
+  const state = activeClockState;
+  document.querySelectorAll('.game-clocks').forEach((clocks) => {
+    const visible = !!state?.clockMinutes;
+    clocks.classList.toggle('hidden', !visible);
+    if (!visible) return;
+
+    clocks.querySelectorAll('.game-clock').forEach((clock) => {
+      const player = clock.dataset.clockPlayer;
+      const baseTime = state.clockRemainingMs?.[player] ?? state.clockMinutes * 60_000;
+      const elapsed = state.clockRunningPlayer === player && state.clockStartedAt
+        ? Date.now() - state.clockStartedAt
+        : 0;
+      const remaining = Math.max(0, baseTime - elapsed);
+      clock.querySelector('time').textContent = formatClockTime(remaining);
+      clock.classList.toggle('is-active', state.clockRunningPlayer === player && !state.winner);
+      clock.classList.toggle('is-low', remaining <= 30_000 && !state.winner);
+    });
+  });
+}
+
+setInterval(updateGameClockDisplays, 200);
 
 function enterTableRoom({ roomId, gameId }) {
   localStream = new MediaStream();
@@ -255,7 +298,8 @@ function renderTableList(tables) {
       : table.gameId === 'memory'
         ? `Hafıza eşleştirme · ${table.boardSize || '4x5'} · 2 oyuncu`
         : descriptions[table.gameId] || '2 oyuncu';
-    meta.textContent = `${description} · ${table.playerCount}/2 oyuncu`;
+    const timeDescription = table.timeMinutes ? ` · ${table.timeMinutes} dk` : '';
+    meta.textContent = `${description}${timeDescription} · ${table.playerCount}/2 oyuncu`;
 
     const action = document.createElement('button');
     action.type = 'button';
@@ -292,7 +336,9 @@ function selectNewTableGame(gameId) {
 
   const isLingo = gameId === 'lingo';
   const isMemory = gameId === 'memory';
+  const hasClock = gameId === 'chess' || gameId === 'backgammon';
   createTableOptions?.classList.toggle('hidden', !isLingo && !isMemory);
+  createTableClockOptions?.classList.toggle('hidden', !hasClock);
   newTableWordLength?.classList.toggle('hidden', !isLingo);
   newTableWordLengthLabel?.classList.toggle('hidden', !isLingo);
   newTableMemorySize?.classList.toggle('hidden', !isMemory);
@@ -307,6 +353,7 @@ openCreateTableModalBtn?.addEventListener('click', () => {
   createTableModal?.setAttribute('aria-hidden', 'false');
   document.querySelectorAll('.game-choice-card').forEach((card) => card.setAttribute('aria-pressed', 'false'));
   createTableOptions?.classList.add('hidden');
+  createTableClockOptions?.classList.add('hidden');
   newTableWordLength?.classList.add('hidden');
   newTableWordLengthLabel?.classList.add('hidden');
   newTableMemorySize?.classList.add('hidden');
@@ -335,7 +382,8 @@ createTableBtn?.addEventListener('click', () => {
   socket.emit('table-create', {
     gameId: selectedNewTableGame,
     wordLength: Number(newTableWordLength?.value || 5),
-    boardSize: newTableMemorySize?.value || '4x5'
+    boardSize: newTableMemorySize?.value || '4x5',
+    timeMinutes: Number(newTableClockMinutes?.value || 0)
   });
 });
 
@@ -440,6 +488,7 @@ function showGameView(mode, gameId) {
   gameActiveChess?.classList.toggle('hidden', mode !== 'active' || gameId !== 'chess');
   gameActiveLingo?.classList.toggle('hidden', mode !== 'active' || gameId !== 'lingo');
   gameActiveMemory?.classList.toggle('hidden', mode !== 'active' || gameId !== 'memory');
+  gameActiveBackgammon?.classList.toggle('hidden', mode !== 'active' || gameId !== 'backgammon');
   gamePanel?.classList.toggle('game-panel-chess', mode === 'active' && gameId === 'chess');
 }
 
@@ -448,14 +497,20 @@ function isAnyGameActive() {
     || !gameActiveBattleship?.classList.contains('hidden')
     || !gameActiveChess?.classList.contains('hidden')
     || !gameActiveLingo?.classList.contains('hidden')
-    || !gameActiveMemory?.classList.contains('hidden');
+    || !gameActiveMemory?.classList.contains('hidden')
+    || !gameActiveBackgammon?.classList.contains('hidden');
 }
 
 document.querySelectorAll('.game-catalog-item')?.forEach((btn) => {
   btn.addEventListener('click', () => {
     if (!currentRoomId) return;
     const gameId = btn.dataset.game;
-    if (gameId) socket.emit('game-select', gameId);
+    if (!gameId) return;
+    const selection = { gameId };
+    if (gameId === 'chess' || gameId === 'backgammon') {
+      selection.timeMinutes = Number(catalogClockMinutes?.value || 0);
+    }
+    socket.emit('game-select', selection);
   });
 });
 
@@ -519,6 +574,8 @@ socket.on('game-state', (state) => {
       renderLingoState(state);
     } else if (gid === 'memory') {
       renderMemoryState(state);
+    } else if (gid === 'backgammon') {
+      renderBackgammonState(state);
     } else {
       renderGameState(state);
     }
@@ -529,6 +586,9 @@ socket.on('game-state', (state) => {
     renderChessState(null);
     renderLingoState(null);
     renderMemoryState(null);
+    renderBackgammonState(null);
+    activeClockState = null;
+    updateGameClockDisplays();
   }
 });
 
@@ -541,6 +601,10 @@ battleResetBtn?.addEventListener('click', () => {
 });
 
 chessResetBtn?.addEventListener('click', () => {
+  if (currentRoomId) socket.emit('game-reset-request');
+});
+
+backgammonResetBtn?.addEventListener('click', () => {
   if (currentRoomId) socket.emit('game-reset-request');
 });
 
@@ -569,6 +633,8 @@ socket.on('game-reset-request', () => {
 socket.on('game-reset-rejected', () => {
   const statusEl = !gameActiveChess?.classList.contains('hidden')
     ? chessStatus
+    : !gameActiveBackgammon?.classList.contains('hidden')
+      ? document.getElementById('backgammonStatus')
     : !gameActiveMemory?.classList.contains('hidden')
       ? memoryStatus
       : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);
@@ -578,6 +644,8 @@ socket.on('game-reset-rejected', () => {
 socket.on('game-reset-accepted', () => {
   const statusEl = !gameActiveChess?.classList.contains('hidden')
     ? chessStatus
+    : !gameActiveBackgammon?.classList.contains('hidden')
+      ? document.getElementById('backgammonStatus')
     : !gameActiveMemory?.classList.contains('hidden')
       ? memoryStatus
       : (gameActiveBattleship?.classList.contains('hidden') ? gameStatus : battleStatus);

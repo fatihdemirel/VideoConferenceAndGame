@@ -383,7 +383,13 @@ function publicChessState(game) {
     player1: game.player1,
     player2: game.player2,
     score1: game.score1 || 0,
-    score2: game.score2 || 0
+    score2: game.score2 || 0,
+    startingPlayer: game.startingPlayer,
+    clockMinutes: game.clockMinutes || 0,
+    clockRemainingMs: game.clockRemainingMs ? { ...game.clockRemainingMs } : null,
+    clockRunningPlayer: game.clockRunningPlayer || null,
+    clockStartedAt: game.clockStartedAt || null,
+    endReason: game.endReason || null
   };
 }
 
