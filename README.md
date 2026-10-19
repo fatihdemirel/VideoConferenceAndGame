@@ -9,11 +9,13 @@ Oyuncuların adlarıyla katıldığı, açık oyun masalarını görüp yeni mas
 - 📹 Kamera aç/kapa
 - 🎲 Canlı oyun lobisi ve açık masa listesi
 - 🪑 Oyun türü seçerek masa oluşturma ve masaya katılma
-- ♟️ İki kişilik satranç, XOX, Amiral Battı ve Lingo
+- ♟️ İki kişilik satranç, tavla, XOX, Amiral Battı ve Lingo
+- ⏱️ Satranç ve tavlada isteğe bağlı 5, 10 veya 15 dakikalık oyun saati
 - 🧩 İki kişilik, 4×5 veya 5×6 taşlı hafıza eşleştirme oyunu
 - 📱 Responsive arayüz
 - 🎮 **Oyunlar:**
   - **Satranç** – Hamle animasyonları ve skor takibi
+  - **Tavla** – Zar, kırık pul, pul toplama ve skor takibi
   - **XOX (TicTacToe)** – Klasik 3x3 X-O oyunu
   - **Amiral Battı** – İki kişilik deniz savaşı ve filo yerleştirme
   - **Lingo** – 4, 5 veya 6 harfli yaygın Türkçe kelimeleri 30 saniyelik sırayla tahmin etme
@@ -118,12 +120,14 @@ npm start
 Her masa iki oyuncu içindir. Masa sahibi oyunu seçer; ikinci oyuncu açık masalardan birine katılarak oyunu başlatır.
 
 - **Satranç:** Sırayla hamle yapın; yeniden başlatma için rakip onayı gerekir.
+- **Tavla:** Zarları atıp pulları seçerek ilerletin; rakibin tek puluna vurabilir ve tüm pullarınızı toplayarak kazanabilirsiniz.
 - **XOX:** Klasik üçe üç X-O oyunu; yeniden başlatma için rakip onayı gerekir.
 - **Amiral Battı:** Her oyuncu gemilerini yerleştirir, ardından sırayla ateş eder. Tüm düşman gemilerini batıran kazanır.
 - **Lingo:** Oyun açılırken 4, 5 veya 6 harf seçilir. Oyuncular yaygın Türkçe kelimeler arasından belirlenen aynı kelimeyi ekrandaki harf klavyesiyle sırayla, her turda 30 saniye içinde tahmin eder. Yeşil harf doğru yerde, sarı harf kelimede başka bir yerde bulunur; doğru konumdaki harfler sonraki tahmin satırında korunur.
 - **Aynısını Bul:** 4×5 (10 çift) veya 5×6 (15 çift) tahtada hayvan ve eşya kartlarını eşleştirin. Eşleşme bulan oyuncu oynamaya devam eder; eşleşme olmazsa kartlar kapanır ve sıra rakibe geçer.
 
 Yeni tur rakip onayıyla başlatıldığında ilk hamle/tahmin sırası oyuncular arasında değişir.
+Satranç ve tavla masası açarken süresiz veya 5, 10 ya da 15 dakikalık saat seçilebilir. Süre dolan oyuncu oyunu kaybeder.
 
 ## Geliştirme
 
