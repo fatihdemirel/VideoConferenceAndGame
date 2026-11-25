@@ -37,6 +37,7 @@ const battleship = require('./games/battleship');
 const lingo = require('./games/lingo');
 const memory = require('./games/memory');
 const backgammon = require('./games/backgammon');
+const botAi = require('./games/bot');
 
 // Statik dosyalar (ön yüz)
 app.use(express.static(CLIENT_DIR));
@@ -54,6 +55,7 @@ const gameState = new Map();
 const lingoTimers = new Map();
 const memoryTimers = new Map();
 const gameClockTimers = new Map();
+const botTimers = new Map();
 
 function createGameById(gameId, {
   keepScores = false,
@@ -95,8 +97,124 @@ function clearGameClockTimer(roomId) {
   gameClockTimers.delete(roomId);
 }
 
+function clearBotTimer(roomId) {
+  const timer = botTimers.get(roomId);
+  if (timer) clearTimeout(timer);
+  botTimers.delete(roomId);
+}
+
+function clearRoomTimers(roomId) {
+  clearLingoTimer(roomId);
+  clearMemoryTimer(roomId);
+  clearGameClockTimer(roomId);
+  clearBotTimer(roomId);
+}
+
+function roomBotParticipants(room) {
+  if (!room?.vsBot || !room.botId) return [];
+  return [{ id: room.botId, name: room.botName || 'Bot', isBot: true }];
+}
+
+function scheduleBotTurn(roomId, extraDelay = 0) {
+  const room = rooms.get(roomId);
+  const game = gameState.get(roomId);
+  clearBotTimer(roomId);
+  if (!room?.vsBot || !room.botId || !game || game.winner) return;
+  if (!botAi.isBotsTurn(game, room.botId)) return;
+
+  const delay = Math.max(0, botAi.thinkDelayMs(room.botLevel) + extraDelay);
+  const timer = setTimeout(() => {
+    botTimers.delete(roomId);
+    runBotTurn(roomId);
+  }, delay);
+  botTimers.set(roomId, timer);
+}
+
+function runBotTurn(roomId) {
+  const room = rooms.get(roomId);
+  const game = gameState.get(roomId);
+  if (!room?.vsBot || !room.botId || !game || game.winner) return;
+  if (!botAi.isBotsTurn(game, room.botId)) return;
+
+  const action = botAi.chooseAction(game, room.botLevel, room.botId);
+  if (!action) return;
+
+  let acted = false;
+  let continueImmediately = false;
+
+  if (action.type === 'tictactoe') {
+    acted = ticTacToe.playMove(game, room.botId, action.index);
+  } else if (action.type === 'chess') {
+    if (!canMakeTimedMove(roomId, game, room.botId)) return;
+    acted = tryChessMove(game, room.botId, action.from, action.to, action.promo);
+    if (acted) settleGameClockAfterMove(roomId, game);
+  } else if (action.type === 'backgammon-roll') {
+    if (!canMakeTimedMove(roomId, game, room.botId)) return;
+    const previousTurn = game.currentTurn;
+    acted = backgammon.rollDice(game, room.botId);
+    if (acted && game.currentTurn !== previousTurn) settleGameClockAfterMove(roomId, game);
+    continueImmediately = acted && botAi.isBotsTurn(game, room.botId);
+  } else if (action.type === 'backgammon-move') {
+    if (!canMakeTimedMove(roomId, game, room.botId)) return;
+    acted = backgammon.playMove(game, room.botId, {
+      from: action.from,
+      to: action.to,
+      die: action.die,
+      dice: action.dice,
+      via: action.via
+    });
+    if (acted) settleGameClockAfterMove(roomId, game);
+    continueImmediately = acted && botAi.isBotsTurn(game, room.botId);
+  } else if (action.type === 'battleship-place') {
+    acted = battleship.placePlayerShips(game, room.botId, action.ships);
+  } else if (action.type === 'battleship-shot') {
+    acted = battleship.shoot(game, room.botId, action.index);
+    continueImmediately = acted && botAi.isBotsTurn(game, room.botId);
+  } else if (action.type === 'lingo') {
+    acted = lingo.submitGuess(game, room.botId, action.guess);
+    if (acted) scheduleLingoTurn(roomId);
+  } else if (action.type === 'memory') {
+    const result = memory.flipCard(game, room.botId, action.index);
+    if (!result) return;
+    acted = true;
+    if (result === 'mismatch') {
+      clearMemoryTimer(roomId);
+      const mismatchTimer = setTimeout(() => {
+        if (gameState.get(roomId) !== game) return;
+        memory.resolveMismatch(game);
+        memoryTimers.delete(roomId);
+        notifyGameUpdate(roomId);
+      }, memory.MISMATCH_DELAY_MS);
+      memoryTimers.set(roomId, mismatchTimer);
+    } else {
+      continueImmediately = botAi.isBotsTurn(game, room.botId);
+    }
+  }
+
+  if (!acted) return;
+  notifyGameUpdate(roomId, continueImmediately ? 220 : 0);
+}
+
+function notifyGameUpdate(roomId, botExtraDelay = 0) {
+  emitGameState(roomId);
+  scheduleBotTurn(roomId, botExtraDelay);
+}
+
+function prepareBotSide(roomId, game) {
+  const room = rooms.get(roomId);
+  if (!room?.vsBot || !room.botId || !game) return;
+  if (game.gameId === 'battleship' && game.phase === 'placement') {
+    const ships = battleship.placeShipsRandom().ships;
+    battleship.placePlayerShips(game, room.botId, ships);
+  }
+  scheduleBotTurn(roomId, 350);
+}
+
 function clockPlayerForTurn(game) {
-  if (game.gameId === 'chess') return game.currentTurn === 'w' ? 'player1' : 'player2';
+  if (game.gameId === 'chess') {
+    const whitePlayer = game.whitePlayer || 'player1';
+    return game.currentTurn === 'w' ? whitePlayer : whitePlayer === 'player1' ? 'player2' : 'player1';
+  }
   return game.currentTurn;
 }
 
@@ -110,14 +228,17 @@ function remainingClockTime(game, player, now = Date.now()) {
 
 function finishGameOnTime(roomId, game, loser) {
   clearGameClockTimer(roomId);
+  clearBotTimer(roomId);
   game.clockRemainingMs[loser] = 0;
   game.clockRunningPlayer = null;
   game.clockStartedAt = null;
   game.endReason = 'timeout';
   if (game.gameId === 'chess') {
-    game.winner = loser === 'player1' ? 'b' : 'w';
-    if (game.winner === 'w') game.score1 = (game.score1 || 0) + 1;
-    else game.score2 = (game.score2 || 0) + 1;
+    const winner = loser === 'player1' ? 'player2' : 'player1';
+    const whitePlayer = game.whitePlayer || 'player1';
+    game.winner = winner === whitePlayer ? 'w' : 'b';
+    game[winner === 'player1' ? 'score1' : 'score2'] =
+      (game[winner === 'player1' ? 'score1' : 'score2'] || 0) + 1;
   } else {
     game.winner = loser === 'player1' ? 'player2' : 'player1';
     game[game.winner === 'player1' ? 'score1' : 'score2'] = (game[game.winner === 'player1' ? 'score1' : 'score2'] || 0) + 1;
@@ -199,7 +320,7 @@ function scheduleLingoTurn(roomId) {
 function advanceLingoTurn(roomId, timedOut = false) {
   const game = gameState.get(roomId);
   if (!lingo.advanceTurn(game, timedOut)) return;
-  emitGameState(roomId);
+  notifyGameUpdate(roomId);
   scheduleLingoTurn(roomId);
 }
 
@@ -216,7 +337,7 @@ function emitGameState(roomId) {
 
 function getTableList() {
   return [...rooms.entries()]
-    .filter(([, room]) => room.isTable && room.users.size > 0)
+    .filter(([, room]) => room.isTable && room.users.size > 0 && !room.vsBot)
     .map(([roomId, room]) => ({
       roomId,
       gameId: room.gameId,
@@ -243,9 +364,12 @@ function addSocketToRoom(socket, roomId, room) {
   socket.join(roomId);
 
   socket.to(roomId).emit('user-joined', { id: socket.id, name: socket.displayName });
-  const otherUsers = room.userOrder
-    .filter(id => id !== socket.id)
-    .map(id => ({ id, name: io.sockets.sockets.get(id)?.displayName || 'Oyuncu' }));
+  const otherUsers = [
+    ...room.userOrder
+      .filter(id => id !== socket.id)
+      .map(id => ({ id, name: io.sockets.sockets.get(id)?.displayName || 'Oyuncu' })),
+    ...roomBotParticipants(room)
+  ];
   socket.emit('room-users', otherUsers);
 }
 
@@ -261,16 +385,12 @@ function removeSocketFromRoom(socket) {
   if (room) {
     room.users.delete(socket.id);
     room.userOrder = room.userOrder.filter(id => id !== socket.id);
-    if (room.users.size === 0) {
-      clearLingoTimer(roomId);
-      clearMemoryTimer(roomId);
-      clearGameClockTimer(roomId);
+    if (room.users.size === 0 || room.vsBot) {
+      clearRoomTimers(roomId);
       rooms.delete(roomId);
       gameState.delete(roomId);
     } else if (room.isTable) {
-      clearLingoTimer(roomId);
-      clearMemoryTimer(roomId);
-      clearGameClockTimer(roomId);
+      clearRoomTimers(roomId);
       const hostId = room.userOrder[0];
       room.pendingGame = {
         gameId: room.gameId,
@@ -286,9 +406,7 @@ function removeSocketFromRoom(socket) {
     } else {
       const game = gameState.get(roomId);
       if (game && (game.player1 === socket.id || game.player2 === socket.id)) {
-        clearLingoTimer(roomId);
-        clearMemoryTimer(roomId);
-        clearGameClockTimer(roomId);
+        clearRoomTimers(roomId);
         gameState.set(roomId, createGameById(game.gameId, {
           wordLength: game.wordLength,
           boardSize: game.boardSize,
@@ -344,13 +462,15 @@ io.on('connection', (socket) => {
     }
     const gameId = typeof selection === 'string' ? selection : selection?.gameId;
     const requestedLength = selection && typeof selection === 'object' ? Number(selection.wordLength) : 5;
-    const wordLength = [4, 5, 6].includes(requestedLength) ? requestedLength : 5;
+    const wordLength = [4, 5, 6, 7, 8].includes(requestedLength) ? requestedLength : 5;
     const requestedBoardSize = selection && typeof selection === 'object' ? selection.boardSize : '4x5';
     const boardSize = ['4x5', '5x6'].includes(requestedBoardSize) ? requestedBoardSize : '4x5';
     const requestedTime = selection && typeof selection === 'object' ? Number(selection.timeMinutes) : 0;
     const timeMinutes = ['chess', 'backgammon'].includes(gameId) && [0, 5, 10, 15].includes(requestedTime)
       ? requestedTime
       : 0;
+    const vsBot = !!(selection && typeof selection === 'object' && selection.vsBot);
+    const botLevel = botAi.clampLevel(selection && typeof selection === 'object' ? selection.botLevel : 5);
     if (!['tictactoe', 'battleship', 'chess', 'backgammon', 'lingo', 'memory'].includes(gameId)) {
       socket.emit('table-error', 'Bu oyun türü kullanılamıyor.');
       return;
@@ -366,14 +486,33 @@ io.on('connection', (socket) => {
       wordLength,
       boardSize,
       timeMinutes,
+      vsBot,
+      botLevel: vsBot ? botLevel : null,
+      botId: vsBot ? botAi.makeBotId(roomId) : null,
+      botName: vsBot ? botAi.botDisplayName(botLevel) : null,
       users: new Set(),
       userOrder: [],
-      pendingGame: { gameId, wordLength, boardSize, timeMinutes, player1: socket.id, playerName: socket.displayName }
+      pendingGame: vsBot
+        ? null
+        : { gameId, wordLength, boardSize, timeMinutes, player1: socket.id, playerName: socket.displayName }
     };
     rooms.set(roomId, room);
     addSocketToRoom(socket, roomId, room);
-    socket.emit('table-joined', { roomId, gameId });
-    io.to(roomId).emit('game-pending', room.pendingGame);
+    socket.emit('table-joined', { roomId, gameId, vsBot, botLevel: room.botLevel, botName: room.botName });
+
+    if (vsBot) {
+      const game = createGameById(gameId, { wordLength, boardSize, timeMinutes });
+      game.player1 = socket.id;
+      game.player2 = room.botId;
+      gameState.set(roomId, game);
+      startGameClock(roomId, game);
+      if (game.gameId === 'lingo') scheduleLingoTurn(roomId);
+      io.to(roomId).emit('game-pending-cleared');
+      prepareBotSide(roomId, game);
+      notifyGameUpdate(roomId);
+    } else {
+      io.to(roomId).emit('game-pending', room.pendingGame);
+    }
     emitTableList();
   });
 
@@ -387,7 +526,7 @@ io.on('connection', (socket) => {
       return;
     }
     const room = rooms.get(roomId);
-    if (!room?.isTable || !room.pendingGame || room.users.size !== 1) {
+    if (!room?.isTable || room.vsBot || !room.pendingGame || room.users.size !== 1) {
       socket.emit('table-error', 'Bu masa artık açık değil. Lütfen başka bir masa seç.');
       emitTableList();
       return;
@@ -462,7 +601,7 @@ io.on('connection', (socket) => {
   socket.on('game-select', (selection) => {
     const gameId = typeof selection === 'string' ? selection : selection?.gameId;
     const requestedLength = selection && typeof selection === 'object' ? Number(selection.wordLength) : 5;
-    const wordLength = [4, 5, 6].includes(requestedLength) ? requestedLength : 5;
+    const wordLength = [4, 5, 6, 7, 8].includes(requestedLength) ? requestedLength : 5;
     const requestedBoardSize = selection && typeof selection === 'object' ? selection.boardSize : '4x5';
     const boardSize = ['4x5', '5x6'].includes(requestedBoardSize) ? requestedBoardSize : '4x5';
     const requestedTime = selection && typeof selection === 'object' ? Number(selection.timeMinutes) : 0;
@@ -515,7 +654,7 @@ io.on('connection', (socket) => {
     if (!socket.roomId || isNaN(index)) return;
     const game = gameState.get(socket.roomId);
     if (!ticTacToe.playMove(game, socket.id, index)) return;
-    io.to(socket.roomId).emit('game-state', { ...game });
+    notifyGameUpdate(socket.roomId);
   });
 
   socket.on('game-chess-move', (data) => {
@@ -524,7 +663,7 @@ io.on('connection', (socket) => {
     if (!canMakeTimedMove(socket.roomId, game, socket.id)) return;
     if (!tryChessMove(game, socket.id, data.from, data.to, data.promo)) return;
     settleGameClockAfterMove(socket.roomId, game);
-    emitGameState(socket.roomId);
+    notifyGameUpdate(socket.roomId);
   });
 
   socket.on('game-backgammon-roll', () => {
@@ -534,7 +673,7 @@ io.on('connection', (socket) => {
     const previousTurn = game?.currentTurn;
     if (!backgammon.rollDice(game, socket.id)) return;
     if (game.currentTurn !== previousTurn) settleGameClockAfterMove(socket.roomId, game);
-    emitGameState(socket.roomId);
+    notifyGameUpdate(socket.roomId);
   });
 
   socket.on('game-backgammon-move', (selection) => {
@@ -543,14 +682,33 @@ io.on('connection', (socket) => {
     if (!canMakeTimedMove(socket.roomId, game, socket.id)) return;
     if (!backgammon.playMove(game, socket.id, selection)) return;
     settleGameClockAfterMove(socket.roomId, game);
-    emitGameState(socket.roomId);
+    notifyGameUpdate(socket.roomId);
+  });
+
+  socket.on('game-backgammon-undo', () => {
+    if (!socket.roomId) return;
+    const game = gameState.get(socket.roomId);
+    if (!game || game.gameId !== 'backgammon' || !game.undoState ||
+        game.undoState.playerId !== socket.id) return;
+    if (game.clockMinutes && game.clockRunningPlayer &&
+        remainingClockTime(game, game.clockRunningPlayer) <= 0) {
+      finishGameOnTime(socket.roomId, game, game.clockRunningPlayer);
+      return;
+    }
+    const wasWinner = !!game.winner;
+    if (!backgammon.undoMove(game, socket.id)) return;
+    if (game.clockMinutes) {
+      if (wasWinner) startGameClock(socket.roomId, game);
+      else settleGameClockAfterMove(socket.roomId, game);
+    }
+    notifyGameUpdate(socket.roomId);
   });
 
   socket.on('game-ships-place', (ships) => {
     if (!socket.roomId || !Array.isArray(ships)) return;
     const game = gameState.get(socket.roomId);
     if (!battleship.placePlayerShips(game, socket.id, ships)) return;
-    io.to(socket.roomId).emit('game-state', { ...game });
+    notifyGameUpdate(socket.roomId);
   });
 
   socket.on('game-shot', (rawIndex) => {
@@ -558,14 +716,14 @@ io.on('connection', (socket) => {
     if (!socket.roomId || isNaN(index)) return;
     const game = gameState.get(socket.roomId);
     if (!battleship.shoot(game, socket.id, index)) return;
-    io.to(socket.roomId).emit('game-state', { ...game });
+    notifyGameUpdate(socket.roomId);
   });
 
   socket.on('game-lingo-guess', (rawGuess) => {
     if (!socket.roomId || typeof rawGuess !== 'string') return;
     const game = gameState.get(socket.roomId);
     if (!lingo.submitGuess(game, socket.id, rawGuess)) return;
-    emitGameState(socket.roomId);
+    notifyGameUpdate(socket.roomId);
     scheduleLingoTurn(socket.roomId);
   });
 
@@ -575,7 +733,7 @@ io.on('connection', (socket) => {
     const game = gameState.get(socket.roomId);
     const result = memory.flipCard(game, socket.id, index);
     if (!result) return;
-    emitGameState(socket.roomId);
+    notifyGameUpdate(socket.roomId);
     if (result === 'mismatch') {
       const roomId = socket.roomId;
       clearMemoryTimer(roomId);
@@ -583,7 +741,7 @@ io.on('connection', (socket) => {
         if (gameState.get(roomId) !== game) return;
         memory.resolveMismatch(game);
         memoryTimers.delete(roomId);
-        emitGameState(roomId);
+        notifyGameUpdate(roomId);
       }, memory.MISMATCH_DELAY_MS);
       memoryTimers.set(roomId, timer);
     }
@@ -591,9 +749,11 @@ io.on('connection', (socket) => {
 
   const resetGameInRoom = (roomId) => {
     const prev = gameState.get(roomId);
+    const room = rooms.get(roomId);
     const startingPlayer = prev?.startingPlayer === 'player2' ? 'player1' : 'player2';
     clearMemoryTimer(roomId);
     clearGameClockTimer(roomId);
+    clearBotTimer(roomId);
     const g = createGameById(prev?.gameId, {
       keepScores: true,
       previous: prev,
@@ -607,8 +767,9 @@ io.on('connection', (socket) => {
     g.player2 = prev?.player2 ?? null;
     gameState.set(roomId, g);
     startGameClock(roomId, g);
-    emitGameState(roomId);
     if (g.gameId === 'lingo') scheduleLingoTurn(roomId);
+    if (room?.vsBot) prepareBotSide(roomId, g);
+    notifyGameUpdate(roomId);
   };
 
   socket.on('game-reset-request', () => {
@@ -616,7 +777,7 @@ io.on('connection', (socket) => {
     const game = gameState.get(socket.roomId);
     const room = rooms.get(socket.roomId);
     if (!game || !room || (game.player1 !== socket.id && game.player2 !== socket.id)) return;
-    if (!game.player2) {
+    if (!game.player2 || room.vsBot || botAi.isBotId(game.player1) || botAi.isBotId(game.player2)) {
       resetGameInRoom(socket.roomId);
       return;
     }

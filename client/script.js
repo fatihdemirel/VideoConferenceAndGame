@@ -22,6 +22,10 @@ const newTableMemorySize = document.getElementById('newTableMemorySize');
 const newTableMemorySizeLabel = document.getElementById('newTableMemorySizeLabel');
 const newTableClockMinutes = document.getElementById('newTableClockMinutes');
 const createTableClockOptions = document.getElementById('createTableClockOptions');
+const createTableBotOptions = document.getElementById('createTableBotOptions');
+const newTableVsBot = document.getElementById('newTableVsBot');
+const newTableBotLevel = document.getElementById('newTableBotLevel');
+const botLevelWrap = document.getElementById('botLevelWrap');
 const createTableBtn = document.getElementById('createTableBtn');
 const openCreateTableModalBtn = document.getElementById('openCreateTableModalBtn');
 const createTableModal = document.getElementById('createTableModal');
@@ -94,7 +98,6 @@ const lingoStatus = document.getElementById('lingoStatus');
 const lingoScore = document.getElementById('lingoScore');
 const lingoTimer = document.getElementById('lingoTimer');
 const lingoKeyboard = document.getElementById('lingoKeyboard');
-const lingoGuessBtn = document.getElementById('lingoGuessBtn');
 const lingoResetBtn = document.getElementById('lingoResetBtn');
 const catalogLingoWordLength = document.getElementById('catalogLingoWordLength');
 const createLingoGameBtn = document.getElementById('createLingoGameBtn');
@@ -140,6 +143,15 @@ function formatClockTime(milliseconds) {
 
 function renderGameClocks(state) {
   activeClockState = state;
+  if (state?.gameId === 'chess') {
+    document.querySelectorAll('#chessClocks .game-clock[data-clock-player]').forEach((clock) => {
+      const player = clock.dataset.clockPlayer;
+      const whitePlayer = state.whitePlayer || 'player1';
+      const playerSlot = state[player] === state.player1 ? 'player1' : 'player2';
+      const side = playerSlot === whitePlayer ? 'Beyaz' : 'Siyah';
+      clock.querySelector('span').textContent = `${side} · ${getParticipantDisplayName(state[player])}`;
+    });
+  }
   updateGameClockDisplays();
 }
 
@@ -166,7 +178,11 @@ function updateGameClockDisplays() {
 
 setInterval(updateGameClockDisplays, 200);
 
-function enterTableRoom({ roomId, gameId }) {
+function isBotParticipant(userId) {
+  return typeof userId === 'string' && userId.startsWith('bot-');
+}
+
+function enterTableRoom({ roomId, gameId, vsBot, botName }) {
   localStream = new MediaStream();
   localVideo.srcObject = localStream;
   participantNames[socket.id] = currentUserName;
@@ -176,10 +192,10 @@ function enterTableRoom({ roomId, gameId }) {
   lobby.classList.add('hidden');
   tableLobby.classList.add('hidden');
   conference.classList.remove('hidden');
-  roomTitle.textContent = `${gameName} masası`;
-  tableGameLabel.textContent = gameName;
-  connectionStatus.textContent = 'Bağlanıyor...';
-  connectionStatus.classList.remove('connected');
+  roomTitle.textContent = vsBot ? `${gameName} · Bot` : `${gameName} masası`;
+  tableGameLabel.textContent = vsBot && botName ? `${gameName} · ${botName}` : gameName;
+  connectionStatus.textContent = vsBot ? 'Bot hazır' : 'Bağlanıyor...';
+  connectionStatus.classList.toggle('connected', !!vsBot);
   showGameView('pending');
   history.replaceState({}, '', window.location.pathname);
   updateMediaButtons();
@@ -346,6 +362,13 @@ function selectNewTableGame(gameId) {
   createTableBtn.disabled = false;
 }
 
+function syncBotLevelVisibility() {
+  const enabled = !!newTableVsBot?.checked;
+  botLevelWrap?.classList.toggle('hidden', !enabled);
+}
+
+newTableVsBot?.addEventListener('change', syncBotLevelVisibility);
+
 openCreateTableModalBtn?.addEventListener('click', () => {
   selectedNewTableGame = null;
   createTableModalError?.classList.add('hidden');
@@ -358,6 +381,9 @@ openCreateTableModalBtn?.addEventListener('click', () => {
   newTableWordLengthLabel?.classList.add('hidden');
   newTableMemorySize?.classList.add('hidden');
   newTableMemorySizeLabel?.classList.add('hidden');
+  if (newTableVsBot) newTableVsBot.checked = false;
+  if (newTableBotLevel) newTableBotLevel.value = '5';
+  syncBotLevelVisibility();
   createTableBtn.disabled = true;
   document.querySelector('.game-choice-card')?.focus();
 });
@@ -383,7 +409,9 @@ createTableBtn?.addEventListener('click', () => {
     gameId: selectedNewTableGame,
     wordLength: Number(newTableWordLength?.value || 5),
     boardSize: newTableMemorySize?.value || '4x5',
-    timeMinutes: Number(newTableClockMinutes?.value || 0)
+    timeMinutes: Number(newTableClockMinutes?.value || 0),
+    vsBot: !!newTableVsBot?.checked,
+    botLevel: Number(newTableBotLevel?.value || 5)
   });
 });
 
@@ -490,6 +518,8 @@ function showGameView(mode, gameId) {
   gameActiveMemory?.classList.toggle('hidden', mode !== 'active' || gameId !== 'memory');
   gameActiveBackgammon?.classList.toggle('hidden', mode !== 'active' || gameId !== 'backgammon');
   gamePanel?.classList.toggle('game-panel-chess', mode === 'active' && gameId === 'chess');
+  gamePanel?.classList.toggle('game-panel-backgammon', mode === 'active' && gameId === 'backgammon');
+  gamePanel?.classList.toggle('game-panel-lingo', mode === 'active' && gameId === 'lingo');
 }
 
 function isAnyGameActive() {
@@ -952,7 +982,9 @@ function removeRemoteVideo(userId) {
 
 // Katılımcı sayısını güncelle
 function updateParticipantCount() {
-  const count = Object.keys(peerConnections).length + 1;
+  const remoteCount = remoteVideos?.querySelectorAll('.video-wrapper.remote').length
+    || Object.keys(peerConnections).length;
+  const count = remoteCount + 1;
   participantCount.textContent = `${count} katılımcı`;
   // Tek başınayken "Bağlantı hazır" göster
   if (count === 1 && connectionStatus.textContent === 'Bağlanıyor...') {
@@ -966,6 +998,10 @@ socket.on('room-users', async (users) => {
   for (const user of users) {
     const userId = typeof user === 'string' ? user : user.id;
     if (typeof user !== 'string' && user.name) participantNames[userId] = user.name;
+    if (isBotParticipant(userId) || user?.isBot) {
+      addBotParticipantCard(userId);
+      continue;
+    }
     await handleNewUser(userId);
   }
   updateParticipantCount();
@@ -993,7 +1029,22 @@ socket.on('peer-video-on', ({ userId }) => {
   if (stream) addRemoteVideo(userId, stream);
 });
 
+function addBotParticipantCard(userId) {
+  if (document.getElementById(`remote-${userId}`)) return;
+  participantNames[userId] = participantNames[userId] || 'Bot';
+  addParticipantPlaceholder(userId);
+  const wrapper = document.getElementById(`remote-${userId}`);
+  wrapper?.classList.add('bot-participant');
+  const label = wrapper?.querySelector('.video-label');
+  if (label) label.textContent = getParticipantDisplayName(userId);
+  updateParticipantCount();
+}
+
 async function handleNewUser(userId) {
+  if (isBotParticipant(userId)) {
+    addBotParticipantCard(userId);
+    return;
+  }
   if (peerConnections[userId]) return; // Zaten bağlantı var, tekrar oluşturma
   iceCandidateQueue[userId] = [];
 

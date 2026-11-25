@@ -344,13 +344,15 @@ function evaluateEnd(game) {
 }
 
 function getInitialChessState(keepScores = false, prev, startingPlayer = 'player1') {
-  const currentTurn = startingPlayer === 'player2' ? 'b' : 'w';
+  const whitePlayer = startingPlayer === 'player2' ? 'player2' : 'player1';
+  const currentTurn = 'w';
   const castle = { wK: true, wQ: true, bK: true, bQ: true };
   return {
     gameId: 'chess',
     board: START_BOARD.slice(),
     currentTurn,
     startingPlayer,
+    whitePlayer,
     winner: null,
     inCheck: false,
     enPassant: null,
@@ -382,6 +384,7 @@ function publicChessState(game) {
     legalMoves: end.legalMoves,
     player1: game.player1,
     player2: game.player2,
+    whitePlayer: game.whitePlayer || 'player1',
     score1: game.score1 || 0,
     score2: game.score2 || 0,
     startingPlayer: game.startingPlayer,
@@ -402,7 +405,9 @@ function tryChessMove(game, socketId, from, to, promo) {
   const isP1 = game.player1 === socketId;
   const isP2 = game.player2 === socketId;
   if (!isP1 && !isP2) return false;
-  const mySide = isP1 ? 'w' : 'b';
+  const player = isP1 ? 'player1' : 'player2';
+  const whitePlayer = game.whitePlayer || 'player1';
+  const mySide = player === whitePlayer ? 'w' : 'b';
   if (game.currentTurn !== mySide) return false;
 
   const promoNorm = typeof promo === 'string' ? promo.toUpperCase() : undefined;
@@ -420,8 +425,13 @@ function tryChessMove(game, socketId, from, to, promo) {
   game.inCheck = end.inCheck;
   game.legalMoves = end.legalMoves;
 
-  if (game.winner === 'w') game.score1 = (game.score1 || 0) + 1;
-  else if (game.winner === 'b') game.score2 = (game.score2 || 0) + 1;
+  if ((game.winner === 'w' && whitePlayer === 'player1') ||
+      (game.winner === 'b' && whitePlayer === 'player2')) {
+    game.score1 = (game.score1 || 0) + 1;
+  } else if ((game.winner === 'w' && whitePlayer === 'player2') ||
+      (game.winner === 'b' && whitePlayer === 'player1')) {
+    game.score2 = (game.score2 || 0) + 1;
+  }
 
   return true;
 }
@@ -429,5 +439,9 @@ function tryChessMove(game, socketId, from, to, promo) {
 module.exports = {
   getInitialChessState,
   publicChessState,
-  tryChessMove
+  tryChessMove,
+  generateLegalMoves,
+  cloneGame,
+  applyMove,
+  evaluateEnd
 };

@@ -11,7 +11,9 @@ function renderGameState(state) {
   if (gameScore) {
     const s1 = state?.score1 ?? 0;
     const s2 = state?.score2 ?? 0;
-    gameScore.textContent = `X: ${s1} — O: ${s2}`;
+    const player1 = state?.player1 ? getParticipantDisplayName(state.player1) : 'X';
+    const player2 = state?.player2 ? getParticipantDisplayName(state.player2) : 'O';
+    gameScore.textContent = `${player1}: ${s1} — ${player2}: ${s2}`;
   }
   const cells = gameBoard.querySelectorAll('.game-cell');
   const winningLine = state?.board ? getWinningLine(state.board) : null;

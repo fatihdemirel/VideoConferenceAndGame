@@ -108,6 +108,45 @@ function applyMove(position, player, move) {
   return next;
 }
 
+function combinedMoveOptions(position, player, dice) {
+  const moves = [];
+  for (let firstIndex = 0; firstIndex < dice.length; firstIndex++) {
+    for (let secondIndex = firstIndex + 1; secondIndex < dice.length; secondIndex++) {
+      const firstDie = Math.max(dice[firstIndex], dice[secondIndex]);
+      const secondDie = Math.min(dice[firstIndex], dice[secondIndex]);
+      for (const firstMove of moveOptions(position.points, position.bar, player, firstDie)) {
+        if (firstMove.to === 'off') continue;
+        const afterFirst = applyMove(position, player, firstMove);
+        for (const secondMove of moveOptions(afterFirst.points, afterFirst.bar, player, secondDie)) {
+          if (secondMove.from !== firstMove.to) continue;
+          moves.push({
+            from: firstMove.from,
+            to: secondMove.to,
+            die: firstDie + secondDie,
+            dice: [firstDie, secondDie],
+            via: firstMove.to
+          });
+        }
+      }
+    }
+  }
+  return moves;
+}
+
+function applyTurnMove(position, player, move) {
+  if (!move.dice) return applyMove(position, player, move);
+  const afterFirst = applyMove(position, player, {
+    from: move.from,
+    to: move.via,
+    die: move.dice[0]
+  });
+  return applyMove(afterFirst, player, {
+    from: move.via,
+    to: move.to,
+    die: move.dice[1]
+  });
+}
+
 function bestMoves(points, bar, off, player, dice) {
   const memo = new Map();
   const solve = (position, remaining) => {
@@ -117,23 +156,28 @@ function bestMoves(points, bar, off, player, dice) {
 
     let maxCount = 0;
     let firstMoves = [];
-    for (const die of new Set(remaining)) {
-      for (const move of moveOptions(position.points, position.bar, player, die)) {
-        const afterMove = applyMove(position, player, move);
-        const diceAfterMove = remaining.slice();
-        diceAfterMove.splice(diceAfterMove.indexOf(die), 1);
-        const next = solve(afterMove, diceAfterMove);
-        const count = next.count + 1;
-        if (count > maxCount) {
-          maxCount = count;
-          firstMoves = [move];
-        } else if (count === maxCount) {
-          firstMoves.push(move);
-        }
+    const availableMoves = [...new Set(remaining)]
+      .flatMap(die => moveOptions(position.points, position.bar, player, die));
+    availableMoves.push(...combinedMoveOptions(position, player, remaining));
+    for (const move of availableMoves) {
+      const diceUsed = move.dice || [move.die];
+      const afterMove = applyTurnMove(position, player, move);
+      const diceAfterMove = remaining.slice();
+      diceUsed.forEach(die => diceAfterMove.splice(diceAfterMove.indexOf(die), 1));
+      const next = solve(afterMove, diceAfterMove);
+      const count = next.count + diceUsed.length;
+      if (count > maxCount) {
+        maxCount = count;
+        firstMoves = [move];
+      } else if (count === maxCount) {
+        firstMoves.push(move);
       }
     }
 
-    const unique = new Map(firstMoves.map(move => [`${move.from}:${move.to}:${move.die}`, move]));
+    const unique = new Map(firstMoves.map(move => [
+      `${move.from}:${move.to}:${move.die}:${move.via ?? ''}`,
+      move
+    ]));
     const result = { count: maxCount, moves: [...unique.values()] };
     memo.set(key, result);
     return result;
@@ -152,6 +196,7 @@ function rollDice(game, socketId, random = Math.random) {
       game.rolledDice || !isPlayersTurn(game, socketId)) return false;
   const first = Math.floor(random() * 6) + 1;
   const second = Math.floor(random() * 6) + 1;
+  delete game.undoState;
   game.rolledDice = [first, second];
   game.diceRemaining = first === second ? [first, first, first, first] : [first, second];
   game.legalMoves = bestMoves(game.points, game.bar, game.off, game.currentTurn, game.diceRemaining);
@@ -176,11 +221,24 @@ function playMove(game, socketId, selection) {
   );
   if (!move) return false;
 
-  const next = applyMove(game, game.currentTurn, move);
+  game.undoState = {
+    playerId: socketId,
+    player: game.currentTurn,
+    points: game.points.slice(),
+    bar: { ...game.bar },
+    off: { ...game.off },
+    rolledDice: game.rolledDice.slice(),
+    diceRemaining: game.diceRemaining.slice(),
+    legalMoves: game.legalMoves.map(candidate => ({ ...candidate, dice: candidate.dice?.slice() })),
+    winner: game.winner,
+    score1: game.score1 || 0,
+    score2: game.score2 || 0
+  };
+  const next = applyTurnMove(game, game.currentTurn, move);
   game.points = next.points;
   game.bar = next.bar;
   game.off = next.off;
-  game.diceRemaining.splice(game.diceRemaining.indexOf(move.die), 1);
+  (move.dice || [move.die]).forEach(die => game.diceRemaining.splice(game.diceRemaining.indexOf(die), 1));
 
   if (game.off[game.currentTurn] === CHECKERS_PER_PLAYER) {
     game.winner = game.currentTurn;
@@ -199,16 +257,37 @@ function playMove(game, socketId, selection) {
   return true;
 }
 
+function undoMove(game, socketId) {
+  if (!game || game.gameId !== 'backgammon' || !game.undoState ||
+      game.undoState.playerId !== socketId) return false;
+  const undo = game.undoState;
+  game.currentTurn = undo.player;
+  game.points = undo.points.slice();
+  game.bar = { ...undo.bar };
+  game.off = { ...undo.off };
+  game.rolledDice = undo.rolledDice.slice();
+  game.diceRemaining = undo.diceRemaining.slice();
+  game.legalMoves = undo.legalMoves.map(move => ({ ...move, dice: move.dice?.slice() }));
+  game.winner = undo.winner;
+  game.score1 = undo.score1;
+  game.score2 = undo.score2;
+  delete game.undoState;
+  return true;
+}
+
 function publicState(game) {
+  const { undoState, ...state } = game;
   return {
-    ...game,
+    ...state,
     points: game.points.slice(),
     bar: { ...game.bar },
     off: { ...game.off },
     rolledDice: game.rolledDice ? game.rolledDice.slice() : null,
     diceRemaining: game.diceRemaining.slice(),
-    legalMoves: game.legalMoves.map(move => ({ ...move }))
+    legalMoves: game.legalMoves.map(move => ({ ...move, dice: move.dice?.slice() })),
+    canUndo: !!undoState,
+    undoPlayer: undoState?.player || null
   };
 }
 
-module.exports = { getInitialState, playMove, publicState, rollDice };
+module.exports = { getInitialState, playMove, publicState, rollDice, undoMove };

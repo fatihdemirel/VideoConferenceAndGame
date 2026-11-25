@@ -11,8 +11,9 @@ const CHESS_PIECE_SHAPES = {
 };
 
 function chessMySide(state) {
-  if (state?.player1 === socket.id) return 'w';
-  if (state?.player2 === socket.id) return 'b';
+  const whitePlayer = state?.whitePlayer || 'player1';
+  if (state?.player1 === socket.id) return whitePlayer === 'player1' ? 'w' : 'b';
+  if (state?.player2 === socket.id) return whitePlayer === 'player2' ? 'w' : 'b';
   return null;
 }
 
@@ -90,7 +91,7 @@ function renderChessState(state) {
     previousState.board[last.to] !== state.board[last.to];
 
   if (chessScore) {
-    chessScore.textContent = `Beyaz: ${state.score1 || 0} — Siyah: ${state.score2 || 0}`;
+    chessScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
   }
 
   let status = 'Bekleniyor...';

@@ -87,6 +87,8 @@
               <option value="4">4 harf</option>
               <option value="5" selected>5 harf</option>
               <option value="6">6 harf</option>
+              <option value="7">7 harf</option>
+              <option value="8">8 harf</option>
             </select>
             <label id="newTableMemorySizeLabel" class="hidden" for="newTableMemorySize">Aynısını Bul tahta boyutu</label>
             <select id="newTableMemorySize" class="hidden" aria-label="Aynısını Bul tahta boyutu">
@@ -102,6 +104,27 @@
               <option value="10">10 dakika</option>
               <option value="15">15 dakika</option>
             </select>
+          </div>
+          <div id="createTableBotOptions" class="create-table-bot-options">
+            <label class="bot-play-toggle" for="newTableVsBot">
+              <input id="newTableVsBot" type="checkbox" />
+              <span>Bot ile oynamak istiyorum</span>
+            </label>
+            <div id="botLevelWrap" class="bot-level-wrap hidden">
+              <label for="newTableBotLevel">Zorluk seviyesi</label>
+              <select id="newTableBotLevel" aria-label="Bot zorluk seviyesi">
+                <option value="1">1 · Çok kolay</option>
+                <option value="2">2 · Kolay</option>
+                <option value="3">3 · Acemi</option>
+                <option value="4">4 · Başlangıç</option>
+                <option value="5" selected>5 · Orta</option>
+                <option value="6">6 · İyi</option>
+                <option value="7">7 · Zor</option>
+                <option value="8">8 · Çok zor</option>
+                <option value="9">9 · Ustalık</option>
+                <option value="10">10 · Uzman</option>
+              </select>
+            </div>
           </div>
           <p id="createTableModalError" class="lobby-error hidden" role="alert"></p>
           <div class="create-table-dialog-actions">
@@ -169,6 +192,8 @@
                 <option value="4">4 harf</option>
                 <option value="5" selected>5 harf</option>
                 <option value="6">6 harf</option>
+                <option value="7">7 harf</option>
+                <option value="8">8 harf</option>
               </select>
               <button id="createLingoGameBtn" class="game-catalog-item" type="button">Lingo masası aç</button>
             </div>
@@ -281,6 +306,7 @@
                     <div id="backgammonDiceLeft" class="backgammon-die-slot" aria-label="Sol zar"></div>
                     <div class="backgammon-control-buttons">
                       <button id="backgammonRollBtn" class="btn chess-promo-btn" type="button">Zarları at</button>
+                      <button id="backgammonUndoBtn" class="btn chess-promo-btn hidden" type="button" disabled>Geri al</button>
                       <button id="backgammonBearOffBtn" class="btn chess-promo-btn hidden" type="button" data-bg-destination="off">Pul çıkar</button>
                     </div>
                     <div id="backgammonDiceRight" class="backgammon-die-slot" aria-label="Sağ zar"></div>
@@ -305,11 +331,16 @@
               <span id="lingoStatus" class="game-status">Bekleniyor...</span>
               <span id="lingoTimer" class="lingo-timer" aria-live="off">30 sn</span>
             </div>
-            <div id="lingoBoard" class="lingo-board" aria-label="Tahminler"></div>
-            <div id="lingoKeyboard" class="lingo-keyboard" aria-label="Harf klavyesi"></div>
-            <button id="lingoGuessBtn" class="btn btn-primary lingo-submit" type="button">Tahmin et</button>
+            <div class="lingo-game-layout">
+              <div id="lingoBoard" class="lingo-board" aria-label="Tahminler"></div>
+              <div id="lingoKeyboard" class="lingo-keyboard" aria-label="Harf klavyesi"></div>
+              <aside class="lingo-history" aria-label="Sorulan kelimeler">
+                <h4>Sorulan kelimeler</h4>
+                <ul id="lingoHistoryList"></ul>
+              </aside>
+            </div>
             <p class="lingo-hint">Yeşil: doğru harf ve yer · Sarı: kelimede var</p>
-            <button id="lingoResetBtn" class="btn btn-icon game-reset-btn">Yeniden Başla</button>
+            <button id="lingoResetBtn" class="btn btn-icon game-reset-btn hidden">Yeniden Başla</button>
           </div>
           <div id="gameActiveMemory" class="game-active game-memory hidden">
             <div class="game-header">

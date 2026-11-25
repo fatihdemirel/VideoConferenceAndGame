@@ -3,6 +3,7 @@ let lingoTimerInterval = null;
 let lingoDraft = [];
 let lingoRenderedGuessCount = 0;
 let lingoRenderedTurn = null;
+let lingoGuessPending = false;
 const LINGO_KEY_ROWS = [
   [...'QWERTYUIOP\u011e\u00dc'],
   [...'ASDFGHJKL\u015e\u0130'],
@@ -23,6 +24,8 @@ function updateLingoTimer() {
 function renderLingoState(state) {
   const previousState = lingoState;
   lingoState = state;
+  lingoResetBtn?.classList.toggle('hidden', !state?.winner);
+  gameActiveLingo?.classList.toggle('is-finished', Boolean(state?.winner));
   if (lingoTimerInterval) {
     clearInterval(lingoTimerInterval);
     lingoTimerInterval = null;
@@ -32,7 +35,7 @@ function renderLingoState(state) {
     lingoBoard.replaceChildren();
     lingoStatus.textContent = 'İkinci oyuncu bekleniyor...';
     lingoDraft = [];
-    lingoGuessBtn.disabled = true;
+    lingoGuessPending = false;
     renderLingoKeyboard(new Map());
     updateLingoTimer();
     return;
@@ -45,11 +48,13 @@ function renderLingoState(state) {
   if (!previousState || previousState.player1 !== state.player1 ||
       guesses.length !== lingoRenderedGuessCount || state.currentTurn !== lingoRenderedTurn) {
     lingoDraft = [];
+    lingoGuessPending = false;
   }
   lingoRenderedGuessCount = guesses.length;
   lingoRenderedTurn = state.currentTurn;
 
   const knownLetters = Array(wordLength).fill('');
+  if (state.firstLetter) knownLetters[0] = state.firstLetter;
   const keyboardStatus = new Map();
   const statusPriority = { absent: 1, present: 2, correct: 3 };
   guesses.forEach((entry) => {
@@ -88,6 +93,7 @@ function renderLingoState(state) {
     rows.appendChild(row);
   }
   lingoBoard.replaceChildren(rows);
+  renderLingoHistory(state);
 
   if (state.winner === 'draw') {
     lingoStatus.textContent = `Berabere! Kelime: ${state.answer}`;
@@ -104,11 +110,48 @@ function renderLingoState(state) {
   if (lingoScore) {
     lingoScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
   }
-  lingoGuessBtn.disabled = !isMyTurn;
-  if (lingoKeyboard) lingoKeyboard.setAttribute('aria-disabled', String(!isMyTurn));
-  renderLingoKeyboard(keyboardStatus, isMyTurn);
+  const canGuess = isMyTurn && !lingoGuessPending;
+  if (lingoKeyboard) lingoKeyboard.setAttribute('aria-disabled', String(!canGuess));
+  renderLingoKeyboard(keyboardStatus, canGuess);
   updateLingoTimer();
   if (!state.winner) lingoTimerInterval = setInterval(updateLingoTimer, 250);
+}
+
+function renderLingoHistory(state) {
+  const list = document.getElementById('lingoHistoryList');
+  if (!list) return;
+  const history = Array.isArray(state?.lingoHistory) ? state.lingoHistory : [];
+  const rows = document.createDocumentFragment();
+
+  for (let index = history.length - 1; index >= 0; index--) {
+    const entry = history[index];
+    const item = document.createElement('li');
+    if (entry.word) {
+      const word = document.createElement('strong');
+      word.textContent = entry.word;
+      item.appendChild(word);
+
+      if (entry.winner === 'draw') {
+        const result = document.createElement('span');
+        result.className = 'lingo-history-result';
+        result.textContent = 'Berabere';
+        item.appendChild(result);
+      } else if (entry.winner) {
+        const winnerName = entry.winner === 'player1'
+          ? getParticipantDisplayName(state.player1)
+          : getParticipantDisplayName(state.player2);
+        const result = document.createElement('span');
+        result.className = 'lingo-history-result';
+        result.textContent = `Kazanan: ${winnerName}`;
+        item.appendChild(result);
+      }
+    } else {
+      item.appendChild(document.createTextNode('Kelime oynanıyor'));
+    }
+    rows.appendChild(item);
+  }
+
+  list.replaceChildren(rows);
 }
 
 function renderLingoKeyboard(keyboardStatus, isMyTurn = false) {
@@ -145,7 +188,8 @@ function renderLingoKeyboard(keyboardStatus, isMyTurn = false) {
 
 lingoKeyboard?.addEventListener('click', (event) => {
   const key = event.target.closest('.lingo-key');
-  if (!key || key.disabled || !lingoState) return;
+  if (!key || key.disabled || !lingoState || lingoGuessPending) return;
+  let guessCompleted = false;
   if (key.dataset.action === 'backspace') {
     for (let index = lingoDraft.length - 1; index >= 0; index--) {
       if (!getLingoKnownLetters()[index] && lingoDraft[index]) {
@@ -156,13 +200,18 @@ lingoKeyboard?.addEventListener('click', (event) => {
   } else {
     const knownLetters = getLingoKnownLetters();
     const nextIndex = knownLetters.findIndex((letter, index) => !letter && !lingoDraft[index]);
-    if (nextIndex !== -1) lingoDraft[nextIndex] = key.dataset.letter;
+    if (nextIndex !== -1) {
+      lingoDraft[nextIndex] = key.dataset.letter;
+      guessCompleted = knownLetters.every((letter, index) => letter || lingoDraft[index]);
+    }
   }
   renderLingoState(lingoState);
+  if (guessCompleted) submitLingoGuess();
 });
 
 function getLingoKnownLetters() {
   const knownLetters = Array(lingoState?.wordLength || 0).fill('');
+  if (lingoState?.firstLetter) knownLetters[0] = lingoState.firstLetter;
   (lingoState?.guesses || []).forEach((entry) => {
     [...(entry.guess || '')].forEach((letter, index) => {
       if (entry.feedback?.[index] === 'correct') knownLetters[index] = letter;
@@ -172,14 +221,21 @@ function getLingoKnownLetters() {
 }
 
 function submitLingoGuess() {
-  if (!currentRoomId || lingoGuessBtn.disabled || !lingoState) return;
+  const myPlayer = lingoState?.player1 === socket.id
+    ? 'player1'
+    : lingoState?.player2 === socket.id ? 'player2' : null;
+  if (!currentRoomId || !lingoState || lingoState.winner || lingoGuessPending ||
+      myPlayer !== lingoState.currentTurn) return;
   const knownLetters = getLingoKnownLetters();
-  const guess = Array.from({ length: lingoState.wordLength }, (_, index) => knownLetters[index] || lingoDraft[index] || '').join('');
-  if ([...guess].length !== lingoState.wordLength) {
+  const letters = Array.from({ length: lingoState.wordLength }, (_, index) => knownLetters[index] || lingoDraft[index] || '');
+  if (letters.some((letter) => !letter)) {
     lingoStatus.textContent = `Tahmin için ${lingoState.wordLength} harfi tamamla.`;
     return;
   }
-  socket.emit('game-lingo-guess', guess);
+  lingoGuessPending = true;
+  lingoStatus.textContent = 'Tahmin gönderiliyor...';
+  if (lingoKeyboard) lingoKeyboard.setAttribute('aria-disabled', 'true');
+  renderLingoKeyboard(new Map(), false);
+  socket.emit('game-lingo-guess', letters.join(''));
 }
 
-lingoGuessBtn?.addEventListener('click', submitLingoGuess);

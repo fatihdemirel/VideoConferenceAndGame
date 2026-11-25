@@ -140,4 +140,4 @@ function shoot(game, socketId, index) {
   return true;
 }
 
-module.exports = { BOARD_SIZE, getInitialState, placePlayerShips, shoot };
+module.exports = { BOARD_SIZE, getInitialState, placePlayerShips, placeShipsRandom, shoot };

@@ -75,7 +75,7 @@ function renderBattleshipState(state) {
   const myShips = isP1 ? state.ships1 : state.ships2;
   const otherShips = isP1 ? state.ships2 : state.ships1;
 
-  battleScore.textContent = `${state.score1 || 0} — ${state.score2 || 0}`;
+  battleScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
 
   if (state.phase === 'placement') {
     battlePlacement?.classList.remove('hidden');

@@ -8,6 +8,7 @@ const backgammonDiceLeft = document.getElementById('backgammonDiceLeft');
 const backgammonDiceRight = document.getElementById('backgammonDiceRight');
 const backgammonStatus = document.getElementById('backgammonStatus');
 const backgammonScore = document.getElementById('backgammonScore');
+const backgammonUndoBtn = document.getElementById('backgammonUndoBtn');
 const backgammonBearOffBtn = document.getElementById('backgammonBearOffBtn');
 const backgammonBarPlayer1 = document.getElementById('backgammonBarPlayer1');
 const backgammonBarPlayer2 = document.getElementById('backgammonBarPlayer2');
@@ -178,8 +179,10 @@ function renderBackgammonState(state, preserveSelection = false) {
     backgammonBarPlayer2.classList.remove('has-checkers', 'is-source');
     backgammonRollBtn.disabled = true;
     backgammonRollBtn.classList.add('hidden');
+    backgammonUndoBtn.disabled = true;
+    backgammonUndoBtn.classList.add('hidden');
     backgammonBearOffBtn.classList.add('hidden');
-    backgammonControls.classList.remove('has-dice', 'can-roll');
+    backgammonControls.classList.remove('has-dice', 'can-roll', 'can-undo');
     return;
   }
 
@@ -193,7 +196,7 @@ function renderBackgammonState(state, preserveSelection = false) {
   backgammonBottomPoints.setAttribute('aria-label', me === 'player2' ? 'Tavla üst hanesi' : 'Tavla alt hanesi');
   const myTurn = state.currentTurn === me;
   const legalMoves = state.legalMoves || [];
-  backgammonScore.textContent = `${state.score1 || 0} — ${state.score2 || 0}`;
+  backgammonScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
   renderCheckerStack(backgammonOffPlayer1, state.off.player1, 'player1', 'off-checker');
   renderCheckerStack(backgammonOffPlayer2, state.off.player2, 'player2', 'off-checker');
   backgammonOffPlayer1.setAttribute('aria-label', `Krem: ${state.off.player1} pul toplandı`);
@@ -237,10 +240,14 @@ function renderBackgammonState(state, preserveSelection = false) {
   }
 
   const canRoll = myTurn && !state.winner && !state.rolledDice;
+  const canUndo = state.canUndo && state.undoPlayer === me;
   backgammonRollBtn.disabled = !canRoll;
   backgammonRollBtn.classList.toggle('hidden', !canRoll);
+  backgammonUndoBtn.classList.toggle('hidden', !canUndo);
+  backgammonUndoBtn.disabled = !canUndo;
   backgammonControls.classList.toggle('has-dice', !!state.rolledDice);
   backgammonControls.classList.toggle('can-roll', canRoll);
+  backgammonControls.classList.toggle('can-undo', canUndo);
   backgammonBearOffBtn.classList.toggle('hidden', !myTurn || !legalMoves.some(move =>
     move.from === backgammonSelectedSource && move.to === 'off'
   ));
@@ -271,6 +278,10 @@ backgammonRollBtn.addEventListener('click', () => {
     backgammonSelectedSource = null;
     socket.emit('game-backgammon-roll');
   }
+});
+
+backgammonUndoBtn.addEventListener('click', () => {
+  if (currentRoomId) socket.emit('game-backgammon-undo');
 });
 
 backgammonBearOffBtn.addEventListener('click', () => makeBackgammonMove('off'));
