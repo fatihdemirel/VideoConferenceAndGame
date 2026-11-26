@@ -47,7 +47,7 @@ function getInitialState(wordLength = 5, keepScores = false, previous, startingP
 }
 
 function publicState(game) {
-  const { answer, ...state } = game;
+  const { answer, pausedTurnMs, ...state } = game;
   const firstLetter = [...answer][0];
   const lingoHistory = (game.lingoHistory || []).map((entry) => ({
     word: entry.winner ? entry.word : null,

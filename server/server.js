@@ -47,6 +47,10 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(CLIENT_DIR, 'index.html'));
 });
 
+app.get('/kamera', (req, res) => {
+  res.sendFile(path.join(CLIENT_DIR, 'kamera.html'));
+});
+
 // Oda bilgileri: { roomId: { users: Set<string>, userOrder: string[] } }
 const rooms = new Map();
 
@@ -56,6 +60,14 @@ const lingoTimers = new Map();
 const memoryTimers = new Map();
 const gameClockTimers = new Map();
 const botTimers = new Map();
+const roomResumeSessions = new Map();
+const ROOM_RESUME_GRACE_MS = 5 * 60 * 1000;
+const cameraPublishers = new Map();
+const cameraViewers = new Map();
+const pendingCameraPublishers = new Map();
+const cameraPasswordAttempts = new Map();
+const CAMERA_PASSWORD_ATTEMPT_LIMIT = 5;
+const CAMERA_PASSWORD_ATTEMPT_WINDOW_MS = 60 * 1000;
 
 function createGameById(gameId, {
   keepScores = false,
@@ -77,6 +89,12 @@ function createGameById(gameId, {
     game.clockMinutes = [0, 5, 10, 15].includes(Number(timeMinutes)) ? Number(timeMinutes) : 0;
   }
   return game;
+}
+
+function isGamePlayerConnected(game, player) {
+  const playerId = player === 'player1' ? game.player1 : game.player2;
+  return typeof playerId === 'string' &&
+    (playerId.startsWith('bot-') || io.sockets.sockets.has(playerId));
 }
 
 function clearLingoTimer(roomId) {
@@ -108,6 +126,101 @@ function clearRoomTimers(roomId) {
   clearMemoryTimer(roomId);
   clearGameClockTimer(roomId);
   clearBotTimer(roomId);
+}
+
+function invalidateRoomResumeSession(socket) {
+  const token = socket.roomResumeToken;
+  if (!token) return;
+  const session = roomResumeSessions.get(token);
+  if (session?.timer) clearTimeout(session.timer);
+  roomResumeSessions.delete(token);
+  socket.roomResumeToken = null;
+}
+
+function createRoomResumeSession(socket, roomId) {
+  invalidateRoomResumeSession(socket);
+  const token = crypto.randomBytes(32).toString('hex');
+  roomResumeSessions.set(token, {
+    roomId,
+    socketId: socket.id,
+    displayName: socket.displayName,
+    socket,
+    timer: null
+  });
+  socket.roomResumeToken = token;
+  return token;
+}
+
+function hashCameraPassword(password, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (error, hash) => {
+      if (error) reject(error);
+      else resolve(hash);
+    });
+  });
+}
+
+function consumeCameraPasswordAttempt(viewerId, publisherId) {
+  const now = Date.now();
+  let attemptsByCamera = cameraPasswordAttempts.get(viewerId);
+  if (!attemptsByCamera) {
+    attemptsByCamera = new Map();
+    cameraPasswordAttempts.set(viewerId, attemptsByCamera);
+  }
+  let attempt = attemptsByCamera.get(publisherId);
+  if (!attempt || now >= attempt.resetAt) {
+    attempt = { count: 0, resetAt: now + CAMERA_PASSWORD_ATTEMPT_WINDOW_MS };
+  }
+  if (attempt.count >= CAMERA_PASSWORD_ATTEMPT_LIMIT) {
+    return Math.ceil((attempt.resetAt - now) / 1000);
+  }
+  attempt.count += 1;
+  attemptsByCamera.set(publisherId, attempt);
+  return 0;
+}
+
+function clearCameraPasswordAttempts(socketId) {
+  cameraPasswordAttempts.delete(socketId);
+  cameraPasswordAttempts.forEach((attemptsByCamera, viewerId) => {
+    attemptsByCamera.delete(socketId);
+    if (attemptsByCamera.size === 0) cameraPasswordAttempts.delete(viewerId);
+  });
+}
+
+function getCameraList() {
+  return [...cameraPublishers.entries()].map(([id, publisher]) => ({
+    id,
+    name: publisher.name,
+    requiresPassword: Boolean(publisher.passwordHash),
+    viewerCount: cameraViewers.get(id)?.size || 0
+  }));
+}
+
+function emitCameraList() {
+  io.emit('camera-list', getCameraList());
+}
+
+function stopCameraPublishing(socket) {
+  const publisher = cameraPublishers.get(socket.id);
+  if (!publisher) return;
+  cameraPublishers.delete(socket.id);
+  clearCameraPasswordAttempts(socket.id);
+  const viewers = cameraViewers.get(socket.id) || new Set();
+  cameraViewers.delete(socket.id);
+  viewers.forEach((viewerId) => {
+    io.to(viewerId).emit('camera-publisher-ended', { publisherId: socket.id });
+  });
+  emitCameraList();
+}
+
+function stopWatchingCameras(socket) {
+  let changed = false;
+  cameraViewers.forEach((viewers, publisherId) => {
+    if (!viewers.delete(socket.id)) return;
+    changed = true;
+    io.to(publisherId).emit('camera-watcher-ended', { viewerId: socket.id });
+  });
+  if (changed) emitCameraList();
 }
 
 function roomBotParticipants(room) {
@@ -250,6 +363,12 @@ function finishGameOnTime(roomId, game, loser) {
 function scheduleGameClock(roomId, game) {
   clearGameClockTimer(roomId);
   if (!game.clockMinutes || game.winner || !game.clockRunningPlayer) return;
+  if (!isGamePlayerConnected(game, game.clockRunningPlayer)) {
+    game.clockRemainingMs[game.clockRunningPlayer] = remainingClockTime(game, game.clockRunningPlayer);
+    game.clockStartedAt = null;
+    return;
+  }
+  if (!game.clockStartedAt) game.clockStartedAt = Date.now();
   const delay = remainingClockTime(game, game.clockRunningPlayer);
   const timer = setTimeout(() => {
     if (gameState.get(roomId) !== game || game.winner) return;
@@ -305,6 +424,15 @@ function scheduleLingoTurn(roomId) {
   clearLingoTimer(roomId);
   const game = gameState.get(roomId);
   if (!game || game.gameId !== 'lingo' || game.winner || !game.player1 || !game.player2) return;
+  if (!isGamePlayerConnected(game, game.currentTurn)) {
+    if (game.turnDeadline) game.pausedTurnMs = Math.max(0, game.turnDeadline - Date.now());
+    game.turnDeadline = null;
+    return;
+  }
+  if (game.pausedTurnMs !== undefined) {
+    game.turnDeadline = Date.now() + game.pausedTurnMs;
+    delete game.pausedTurnMs;
+  }
   const delay = Math.max(0, game.turnDeadline - Date.now());
   const timer = setTimeout(() => {
     if (gameState.get(roomId) !== game || game.winner) return;
@@ -362,20 +490,23 @@ function addSocketToRoom(socket, roomId, room) {
   room.userOrder.push(socket.id);
   socket.roomId = roomId;
   socket.join(roomId);
+  const resumeToken = createRoomResumeSession(socket, roomId);
 
   socket.to(roomId).emit('user-joined', { id: socket.id, name: socket.displayName });
   const otherUsers = [
     ...room.userOrder
-      .filter(id => id !== socket.id)
+      .filter(id => id !== socket.id && io.sockets.sockets.has(id))
       .map(id => ({ id, name: io.sockets.sockets.get(id)?.displayName || 'Oyuncu' })),
     ...roomBotParticipants(room)
   ];
   socket.emit('room-users', otherUsers);
+  return resumeToken;
 }
 
 function removeSocketFromRoom(socket) {
   const roomId = socket.roomId;
   if (!roomId) return;
+  invalidateRoomResumeSession(socket);
   const room = rooms.get(roomId);
 
   socket.to(roomId).emit('user-left', socket.id);
@@ -426,6 +557,238 @@ function removeSocketFromRoom(socket) {
 
 io.on('connection', (socket) => {
   console.log('Yeni kullanıcı bağlandı:', socket.id);
+
+  socket.on('camera-list-request', () => {
+    socket.emit('camera-list', getCameraList());
+  });
+
+  socket.on('camera-publish-start', async (payload) => {
+    const rawName = typeof payload === 'string' ? payload : payload?.name;
+    const name = typeof rawName === 'string' ? rawName.trim().slice(0, 32) : '';
+    const rawPassword = payload && typeof payload === 'object' ? payload.password : undefined;
+    if (!name) {
+      socket.emit('camera-publish-error', 'Yayın için bir kamera adı yaz.');
+      return;
+    }
+    if (rawPassword !== undefined &&
+        (typeof rawPassword !== 'string' || rawPassword.length > 128)) {
+      socket.emit('camera-publish-error', 'Şifre en fazla 128 karakter olabilir.');
+      return;
+    }
+    if (cameraPublishers.has(socket.id) || pendingCameraPublishers.has(socket.id)) {
+      socket.emit('camera-publish-error', 'Bu bağlantı zaten yayın yapıyor.');
+      return;
+    }
+    const publishAttempt = {};
+    pendingCameraPublishers.set(socket.id, publishAttempt);
+    const password = rawPassword || '';
+    let passwordSalt = null;
+    let passwordHash = null;
+    if (password) {
+      passwordSalt = crypto.randomBytes(16);
+      try {
+        passwordHash = await hashCameraPassword(password, passwordSalt);
+      } catch (error) {
+        if (pendingCameraPublishers.get(socket.id) !== publishAttempt) return;
+        pendingCameraPublishers.delete(socket.id);
+        console.error('Kamera izleme şifresi oluşturulamadı:', error);
+        socket.emit('camera-publish-error', 'Kamera şifresi ayarlanamadı. Tekrar dene.');
+        return;
+      }
+    }
+    if (pendingCameraPublishers.get(socket.id) !== publishAttempt) return;
+    pendingCameraPublishers.delete(socket.id);
+    if (!io.sockets.sockets.has(socket.id)) return;
+    if (cameraPublishers.has(socket.id)) {
+      socket.emit('camera-publish-error', 'Bu bağlantı zaten yayın yapıyor.');
+      return;
+    }
+    cameraPublishers.set(socket.id, { name, passwordSalt, passwordHash });
+    cameraViewers.set(socket.id, new Set());
+    socket.emit('camera-publish-started');
+    emitCameraList();
+  });
+
+  socket.on('camera-publish-stop', () => {
+    pendingCameraPublishers.delete(socket.id);
+    stopCameraPublishing(socket);
+  });
+
+  socket.on('camera-watch', async (payload) => {
+    const publisherId = typeof payload === 'string' ? payload : payload?.publisherId;
+    const password = payload && typeof payload === 'object' ? payload.password : undefined;
+    let publisher = typeof publisherId === 'string' ? cameraPublishers.get(publisherId) : null;
+    if (!publisher || publisherId === socket.id) {
+      socket.emit('camera-watch-error', {
+        publisherId,
+        message: 'Bu kamera yayını artık kullanılabilir değil.'
+      });
+      return;
+    }
+    if (publisher.passwordHash) {
+      const publisherAtAttempt = publisher;
+      if (typeof password !== 'string' || !password) {
+        socket.emit('camera-watch-password-required', {
+          publisherId,
+          message: 'Bu kamerayı izlemek için şifre gir.'
+        });
+        return;
+      }
+      if (password.length > 128) {
+        socket.emit('camera-watch-password-required', {
+          publisherId,
+          message: 'Şifre hatalı. Tekrar deneyin.'
+        });
+        return;
+      }
+      const retryAfter = consumeCameraPasswordAttempt(socket.id, publisherId);
+      if (retryAfter) {
+        socket.emit('camera-watch-error', {
+          publisherId,
+          message: `Çok fazla hatalı deneme. ${retryAfter} saniye sonra tekrar dene.`
+        });
+        return;
+      }
+      let passwordHash;
+      try {
+        passwordHash = await hashCameraPassword(password, publisher.passwordSalt);
+      } catch (error) {
+        console.error('Kamera izleme şifresi doğrulanamadı:', error);
+        socket.emit('camera-watch-error', {
+          publisherId,
+          message: 'Şifre doğrulanamadı. Biraz sonra tekrar dene.'
+        });
+        return;
+      }
+      if (!io.sockets.sockets.has(socket.id)) return;
+      publisher = cameraPublishers.get(publisherId);
+      if (publisher !== publisherAtAttempt) {
+        socket.emit('camera-watch-error', {
+          publisherId,
+          message: 'Bu kamera yayını artık kullanılabilir değil.'
+        });
+        return;
+      }
+      if (!crypto.timingSafeEqual(passwordHash, publisher.passwordHash)) {
+        socket.emit('camera-watch-password-required', {
+          publisherId,
+          message: 'Şifre yanlış. Tekrar deneyin.'
+        });
+        return;
+      }
+      const attemptsByCamera = cameraPasswordAttempts.get(socket.id);
+      attemptsByCamera?.delete(publisherId);
+      if (attemptsByCamera?.size === 0) cameraPasswordAttempts.delete(socket.id);
+    }
+    if (!io.sockets.sockets.has(socket.id)) return;
+    const viewers = cameraViewers.get(publisherId);
+    if (viewers.has(socket.id)) return;
+    viewers.add(socket.id);
+    socket.emit('camera-watch-started', { publisherId });
+    io.to(publisherId).emit('camera-watch-request', {
+      viewerId: socket.id,
+      viewerName: socket.displayName || 'İzleyici'
+    });
+    emitCameraList();
+  });
+
+  socket.on('camera-unwatch', (publisherId) => {
+    if (typeof publisherId !== 'string') return;
+    const viewers = cameraViewers.get(publisherId);
+    if (!viewers?.delete(socket.id)) return;
+    io.to(publisherId).emit('camera-watcher-ended', { viewerId: socket.id });
+    emitCameraList();
+  });
+
+  socket.on('camera-signal-offer', (payload) => {
+    const to = payload?.to;
+    const offer = payload?.offer;
+    if (typeof to !== 'string' || !offer || typeof offer.type !== 'string' ||
+        typeof offer.sdp !== 'string' || !cameraViewers.get(socket.id)?.has(to)) return;
+    io.to(to).emit('camera-signal-offer', { from: socket.id, offer });
+  });
+
+  socket.on('camera-signal-answer', (payload) => {
+    const to = payload?.to;
+    const answer = payload?.answer;
+    if (typeof to !== 'string' || !answer || typeof answer.type !== 'string' ||
+        typeof answer.sdp !== 'string' || !cameraViewers.get(to)?.has(socket.id)) return;
+    io.to(to).emit('camera-signal-answer', { from: socket.id, answer });
+  });
+
+  socket.on('camera-signal-ice', (payload) => {
+    const to = payload?.to;
+    const candidate = payload?.candidate;
+    if (typeof to !== 'string' || !candidate || typeof candidate.candidate !== 'string') return;
+    const isPublisherToViewer = cameraViewers.get(socket.id)?.has(to);
+    const isViewerToPublisher = cameraPublishers.has(to) &&
+      cameraViewers.get(to)?.has(socket.id);
+    if (!isPublisherToViewer && !isViewerToPublisher) return;
+    io.to(to).emit('camera-signal-ice', { from: socket.id, candidate });
+  });
+
+  socket.on('resume-room', (rawToken) => {
+    if (typeof rawToken !== 'string') {
+      socket.emit('room-resume-failed');
+      return;
+    }
+
+    const session = roomResumeSessions.get(rawToken);
+    const room = session && rooms.get(session.roomId);
+    if (!session || !room || !room.users.has(session.socketId) ||
+        (session.socketId !== socket.id && io.sockets.sockets.has(session.socketId))) {
+      if (session?.timer) clearTimeout(session.timer);
+      roomResumeSessions.delete(rawToken);
+      socket.emit('room-resume-failed');
+      return;
+    }
+
+    if (session.timer) clearTimeout(session.timer);
+    const previousSocketId = session.socketId;
+    const roomId = session.roomId;
+    const previousSocket = session.socket;
+    if (previousSocketId !== socket.id) {
+      room.users.delete(previousSocketId);
+      room.users.add(socket.id);
+      room.userOrder = room.userOrder.map((id) => id === previousSocketId ? socket.id : id);
+      const game = gameState.get(roomId);
+      if (game?.player1 === previousSocketId) game.player1 = socket.id;
+      if (game?.player2 === previousSocketId) game.player2 = socket.id;
+      if (room.pendingGame?.player1 === previousSocketId) room.pendingGame.player1 = socket.id;
+      if (previousSocket) previousSocket.roomId = null;
+    }
+
+    socket.displayName = session.displayName;
+    socket.roomId = roomId;
+    socket.roomResumeToken = rawToken;
+    session.socketId = socket.id;
+    session.socket = socket;
+    session.timer = null;
+    socket.join(roomId);
+    const game = gameState.get(roomId);
+    if (game?.gameId === 'lingo') scheduleLingoTurn(roomId);
+    if (game?.clockMinutes) scheduleGameClock(roomId, game);
+
+    socket.to(roomId).emit('user-joined', { id: socket.id, name: socket.displayName });
+    const otherUsers = [
+      ...room.userOrder
+        .filter((id) => id !== socket.id && io.sockets.sockets.has(id))
+        .map((id) => ({ id, name: io.sockets.sockets.get(id)?.displayName || 'Oyuncu' })),
+      ...roomBotParticipants(room)
+    ];
+    socket.emit('room-resumed', {
+      roomId,
+      gameId: room.gameId,
+      vsBot: room.vsBot,
+      botName: room.botName,
+      displayName: session.displayName,
+      resumeToken: rawToken
+    });
+    socket.emit('room-users', otherUsers);
+    if (room.pendingGame) socket.emit('game-pending', room.pendingGame);
+    emitGameState(roomId);
+    emitTableList();
+  });
 
   socket.on('lobby-join', (rawName) => {
     if (socket.roomId) {
@@ -497,8 +860,8 @@ io.on('connection', (socket) => {
         : { gameId, wordLength, boardSize, timeMinutes, player1: socket.id, playerName: socket.displayName }
     };
     rooms.set(roomId, room);
-    addSocketToRoom(socket, roomId, room);
-    socket.emit('table-joined', { roomId, gameId, vsBot, botLevel: room.botLevel, botName: room.botName });
+    const resumeToken = addSocketToRoom(socket, roomId, room);
+    socket.emit('table-joined', { roomId, gameId, vsBot, botLevel: room.botLevel, botName: room.botName, resumeToken });
 
     if (vsBot) {
       const game = createGameById(gameId, { wordLength, boardSize, timeMinutes });
@@ -533,7 +896,7 @@ io.on('connection', (socket) => {
     }
 
     const { gameId, player1 } = room.pendingGame;
-    addSocketToRoom(socket, roomId, room);
+    const resumeToken = addSocketToRoom(socket, roomId, room);
     delete room.pendingGame;
     const game = createGameById(gameId, {
       wordLength: room.wordLength,
@@ -546,7 +909,7 @@ io.on('connection', (socket) => {
     startGameClock(roomId, game);
     if (game.gameId === 'lingo') scheduleLingoTurn(roomId);
 
-    socket.emit('table-joined', { roomId, gameId });
+    socket.emit('table-joined', { roomId, gameId, resumeToken });
     io.to(roomId).emit('game-pending-cleared');
     emitGameState(roomId);
     emitTableList();
@@ -829,7 +1192,28 @@ io.on('connection', (socket) => {
     removeSocketFromRoom(socket);
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    pendingCameraPublishers.delete(socket.id);
+    stopCameraPublishing(socket);
+    stopWatchingCameras(socket);
+    clearCameraPasswordAttempts(socket.id);
+    const token = socket.roomResumeToken;
+    const session = token && roomResumeSessions.get(token);
+    if (socket.roomId && session) {
+      socket.to(socket.roomId).emit('user-left', socket.id);
+      const game = gameState.get(socket.roomId);
+      if (game?.gameId === 'lingo') scheduleLingoTurn(socket.roomId);
+      if (game?.clockMinutes) scheduleGameClock(socket.roomId, game);
+      emitGameState(socket.roomId);
+      session.timer = setTimeout(() => {
+        if (roomResumeSessions.get(token) !== session) return;
+        roomResumeSessions.delete(token);
+        session.socket.roomResumeToken = null;
+        removeSocketFromRoom(session.socket);
+      }, ROOM_RESUME_GRACE_MS);
+      console.log(`Kullanıcı bağlantısı kesildi (${reason}); oda ${ROOM_RESUME_GRACE_MS / 60000} dakika korunacak:`, socket.id);
+      return;
+    }
     removeSocketFromRoom(socket);
     console.log('Kullanıcı ayrıldı:', socket.id);
   });

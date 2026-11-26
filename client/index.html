@@ -327,17 +327,23 @@
           <div id="gameActiveLingo" class="game-active game-lingo hidden">
             <div class="game-header">
               <h3>Lingo</h3>
-              <div id="lingoScore" class="game-score">0 — 0</div>
+              <div id="lingoScore" class="lingo-scoreboard" aria-label="Skor tablosu">
+                <div class="lingo-score-player">
+                  <span id="lingoPlayer1Name">Oyuncu 1</span>
+                  <strong id="lingoScore1">0</strong>
+                </div>
+                <span class="lingo-score-divider" aria-hidden="true">—</span>
+                <div class="lingo-score-player">
+                  <span id="lingoPlayer2Name">Oyuncu 2</span>
+                  <strong id="lingoScore2">0</strong>
+                </div>
+              </div>
               <span id="lingoStatus" class="game-status">Bekleniyor...</span>
               <span id="lingoTimer" class="lingo-timer" aria-live="off">30 sn</span>
             </div>
             <div class="lingo-game-layout">
               <div id="lingoBoard" class="lingo-board" aria-label="Tahminler"></div>
               <div id="lingoKeyboard" class="lingo-keyboard" aria-label="Harf klavyesi"></div>
-              <aside class="lingo-history" aria-label="Sorulan kelimeler">
-                <h4>Sorulan kelimeler</h4>
-                <ul id="lingoHistoryList"></ul>
-              </aside>
             </div>
             <p class="lingo-hint">Yeşil: doğru harf ve yer · Sarı: kelimede var</p>
             <button id="lingoResetBtn" class="btn btn-icon game-reset-btn hidden">Yeniden Başla</button>

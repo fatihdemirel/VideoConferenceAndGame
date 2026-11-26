@@ -4,6 +4,8 @@
 
 const socket = io();
 const DISPLAY_NAME_STORAGE_KEY = 'videoConference.displayName';
+const ROOM_RESUME_TOKEN_KEY = 'videoConference.roomResumeToken';
+const ROOM_ID_STORAGE_KEY = 'videoConference.roomId';
 
 // DOM elementleri
 const lobby = document.getElementById('lobby');
@@ -96,6 +98,10 @@ const memoryResetBtn = document.getElementById('memoryResetBtn');
 const lingoBoard = document.getElementById('lingoBoard');
 const lingoStatus = document.getElementById('lingoStatus');
 const lingoScore = document.getElementById('lingoScore');
+const lingoPlayer1Name = document.getElementById('lingoPlayer1Name');
+const lingoPlayer2Name = document.getElementById('lingoPlayer2Name');
+const lingoScore1 = document.getElementById('lingoScore1');
+const lingoScore2 = document.getElementById('lingoScore2');
 const lingoTimer = document.getElementById('lingoTimer');
 const lingoKeyboard = document.getElementById('lingoKeyboard');
 const lingoResetBtn = document.getElementById('lingoResetBtn');
@@ -119,8 +125,10 @@ let localStream = null;
 let peerConnections = {};
 let iceCandidateQueue = {}; // userId -> [candidates] (remote description gelmeden önce buffer)
 const remoteStreams = {};   // userId -> MediaStream (uzak kullanıcının tüm track'leri tek stream'de; sadece kamera gelse de görünsün)
-let currentRoomId = null;
-let currentUserName = '';
+let currentRoomId = sessionStorage.getItem(ROOM_ID_STORAGE_KEY);
+let currentUserName = currentRoomId ? (savedDisplayName || '') : '';
+let screenWakeLock = null;
+let screenWakeLockRequest = null;
 const participantNames = {};
 let isMuted = false;
 let isVideoOff = false;
@@ -182,12 +190,14 @@ function isBotParticipant(userId) {
   return typeof userId === 'string' && userId.startsWith('bot-');
 }
 
-function enterTableRoom({ roomId, gameId, vsBot, botName }) {
+function enterTableRoom({ roomId, gameId, vsBot, botName, resumeToken }) {
   localStream = new MediaStream();
   localVideo.srcObject = localStream;
   participantNames[socket.id] = currentUserName;
   updateLocalVideoPlaceholder();
   currentRoomId = roomId;
+  sessionStorage.setItem(ROOM_ID_STORAGE_KEY, roomId);
+  if (resumeToken) sessionStorage.setItem(ROOM_RESUME_TOKEN_KEY, resumeToken);
   const gameName = GAME_NAMES[gameId] || 'Oyun';
   lobby.classList.add('hidden');
   tableLobby.classList.add('hidden');
@@ -197,6 +207,7 @@ function enterTableRoom({ roomId, gameId, vsBot, botName }) {
   connectionStatus.textContent = vsBot ? 'Bot hazır' : 'Bağlanıyor...';
   connectionStatus.classList.toggle('connected', !!vsBot);
   showGameView('pending');
+  keepGameScreenAwake();
   history.replaceState({}, '', window.location.pathname);
   updateMediaButtons();
   pendingGame = null;
@@ -216,11 +227,46 @@ joinBtn.addEventListener('click', () => {
 });
 
 socket.on('connect', () => {
+  if (currentRoomId) {
+    connectionStatus.textContent = 'Bağlantı yeniden kuruluyor...';
+    socket.emit('resume-room', sessionStorage.getItem(ROOM_RESUME_TOKEN_KEY));
+    return;
+  }
   if (!currentUserName && savedDisplayName && displayNameInput.value === savedDisplayName) {
     joinBtn.click();
   }
 });
-if (socket.connected && savedDisplayName) joinBtn.click();
+
+socket.on('disconnect', () => {
+  if (!currentRoomId) return;
+  connectionStatus.textContent = 'Bağlantı koptu · yeniden bağlanılıyor...';
+  connectionStatus.classList.remove('connected');
+  Object.keys(peerConnections).forEach(removeRemoteVideo);
+});
+
+socket.on('room-resumed', (data) => {
+  if (conference.classList.contains('hidden')) {
+    currentUserName = data.displayName || currentUserName;
+    enterTableRoom(data);
+  }
+  participantNames[socket.id] = currentUserName;
+  connectionStatus.textContent = 'Bağlı';
+  connectionStatus.classList.add('connected');
+  keepGameScreenAwake();
+});
+
+socket.on('room-resume-failed', () => {
+  connectionStatus.textContent = 'Oyun bağlantısı yenilenemedi';
+  connectionStatus.classList.remove('connected');
+  if (conference.classList.contains('hidden')) {
+    currentRoomId = null;
+    sessionStorage.removeItem(ROOM_ID_STORAGE_KEY);
+    sessionStorage.removeItem(ROOM_RESUME_TOKEN_KEY);
+    lobbyError.textContent = 'Oyun oturumu sona ermiş. Lütfen yeniden masaya katıl.';
+    lobbyError.classList.remove('hidden');
+  }
+});
+if (socket.connected && !currentRoomId && savedDisplayName) joinBtn.click();
 
 displayNameInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') joinBtn.click();
@@ -596,6 +642,7 @@ socket.on('game-state', (state) => {
     pendingGame = null;
     const gid = state.gameId || 'tictactoe';
     showGameView('active', gid);
+    keepGameScreenAwake();
     if (gid === 'battleship') {
       renderBattleshipState(state);
     } else if (gid === 'chess') {
@@ -610,6 +657,11 @@ socket.on('game-state', (state) => {
       renderGameState(state);
     }
   } else {
+    if (screenWakeLock) {
+      const wakeLock = screenWakeLock;
+      screenWakeLock = null;
+      wakeLock.release().catch((error) => console.warn('Ekran kilidi bırakılamadı:', error));
+    }
     showGameView('catalog');
     renderGameState(null);
     renderBattleshipState(null);
@@ -620,6 +672,33 @@ socket.on('game-state', (state) => {
     activeClockState = null;
     updateGameClockDisplays();
   }
+});
+
+async function keepGameScreenAwake() {
+  if (!navigator.wakeLock || !currentRoomId || !isAnyGameActive() ||
+      document.visibilityState !== 'visible' ||
+      (screenWakeLock && !screenWakeLock.released) || screenWakeLockRequest) return;
+
+  try {
+    screenWakeLockRequest = navigator.wakeLock.request('screen');
+    const wakeLock = await screenWakeLockRequest;
+    if (!currentRoomId || !isAnyGameActive() || document.visibilityState !== 'visible') {
+      await wakeLock.release();
+      return;
+    }
+    screenWakeLock = wakeLock;
+    wakeLock.addEventListener('release', () => {
+      if (screenWakeLock === wakeLock) screenWakeLock = null;
+    });
+  } catch (error) {
+    console.warn('Ekran açık tutulamadı:', error);
+  } finally {
+    screenWakeLockRequest = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') keepGameScreenAwake();
 });
 
 gameResetBtn?.addEventListener('click', () => {
@@ -1130,6 +1209,8 @@ leaveBtn.addEventListener('click', () => {
 });
 
 function leaveRoom() {
+  screenWakeLock?.release().catch((error) => console.warn('Ekran kilidi bırakılamadı:', error));
+  screenWakeLock = null;
   Object.values(peerConnections).forEach(pc => pc.close());
   peerConnections = {};
 
@@ -1159,6 +1240,8 @@ function leaveRoom() {
     socket.emit('leave-room');
   }
 
+  sessionStorage.removeItem(ROOM_RESUME_TOKEN_KEY);
+  sessionStorage.removeItem(ROOM_ID_STORAGE_KEY);
   currentRoomId = null;
   conference.classList.add('hidden');
   tableLobby.classList.remove('hidden');

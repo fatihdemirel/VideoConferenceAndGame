@@ -18,7 +18,7 @@ function updateLingoTimer() {
   }
   const seconds = Math.max(0, Math.ceil((lingoState.turnDeadline - Date.now()) / 1000));
   lingoTimer.textContent = `${seconds} sn`;
-  lingoTimer.classList.toggle('is-low', seconds <= 3);
+  lingoTimer.classList.toggle('is-low', seconds <= 10);
 }
 
 function renderLingoState(state) {
@@ -93,12 +93,13 @@ function renderLingoState(state) {
     rows.appendChild(row);
   }
   lingoBoard.replaceChildren(rows);
-  renderLingoHistory(state);
 
   if (state.winner === 'draw') {
     lingoStatus.textContent = `Berabere! Kelime: ${state.answer}`;
   } else if (state.winner) {
     lingoStatus.textContent = state.winner === myPlayer ? 'Doğru bildin, kazandın!' : 'Rakibin bildi!';
+  } else if (state.turnDeadline === null) {
+    lingoStatus.textContent = 'Rakibin bağlantısı bekleniyor...';
   } else if (myPlayer) {
     lingoStatus.textContent = isMyTurn ? 'Senin sıran!' : `${getParticipantDisplayName(state.currentTurn === 'player1' ? state.player1 : state.player2)} tahmin ediyor`;
   } else {
@@ -108,50 +109,16 @@ function renderLingoState(state) {
     lingoStatus.textContent += ` Kelime: ${state.answer}`;
   }
   if (lingoScore) {
-    lingoScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
+    lingoPlayer1Name.textContent = getParticipantDisplayName(state.player1);
+    lingoPlayer2Name.textContent = getParticipantDisplayName(state.player2);
+    lingoScore1.textContent = String(state.score1 || 0);
+    lingoScore2.textContent = String(state.score2 || 0);
   }
   const canGuess = isMyTurn && !lingoGuessPending;
   if (lingoKeyboard) lingoKeyboard.setAttribute('aria-disabled', String(!canGuess));
   renderLingoKeyboard(keyboardStatus, canGuess);
   updateLingoTimer();
   if (!state.winner) lingoTimerInterval = setInterval(updateLingoTimer, 250);
-}
-
-function renderLingoHistory(state) {
-  const list = document.getElementById('lingoHistoryList');
-  if (!list) return;
-  const history = Array.isArray(state?.lingoHistory) ? state.lingoHistory : [];
-  const rows = document.createDocumentFragment();
-
-  for (let index = history.length - 1; index >= 0; index--) {
-    const entry = history[index];
-    const item = document.createElement('li');
-    if (entry.word) {
-      const word = document.createElement('strong');
-      word.textContent = entry.word;
-      item.appendChild(word);
-
-      if (entry.winner === 'draw') {
-        const result = document.createElement('span');
-        result.className = 'lingo-history-result';
-        result.textContent = 'Berabere';
-        item.appendChild(result);
-      } else if (entry.winner) {
-        const winnerName = entry.winner === 'player1'
-          ? getParticipantDisplayName(state.player1)
-          : getParticipantDisplayName(state.player2);
-        const result = document.createElement('span');
-        result.className = 'lingo-history-result';
-        result.textContent = `Kazanan: ${winnerName}`;
-        item.appendChild(result);
-      }
-    } else {
-      item.appendChild(document.createTextNode('Kelime oynanıyor'));
-    }
-    rows.appendChild(item);
-  }
-
-  list.replaceChildren(rows);
 }
 
 function renderLingoKeyboard(keyboardStatus, isMyTurn = false) {

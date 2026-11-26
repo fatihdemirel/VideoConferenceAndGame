@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <title>Güvenlik Kameraları</title>
+  <link rel="stylesheet" href="/kamera.css">
+</head>
+<body>
+  <header class="camera-header">
+    <a class="back-link" href="/">← Ana sayfa</a>
+    <div>
+      <p class="eyebrow">CANLI GÖRÜNTÜLER</p>
+      <h1>Güvenlik Kameraları</h1>
+      <p class="header-description">Paylaşıma açılan kameraları canlı izleyin veya kendi kameranızı yayınlayın.</p>
+    </div>
+  </header>
+
+  <main class="camera-layout">
+    <section class="publish-panel" aria-labelledby="publishTitle">
+      <div class="section-heading">
+        <div class="section-icon" aria-hidden="true">＋</div>
+        <div>
+          <h2 id="publishTitle">Kameranı paylaş</h2>
+          <p>Kameranı güvenlik kamerası olarak yayınla.</p>
+        </div>
+      </div>
+
+      <div id="publishLauncher" class="publish-launcher">
+        <p>Paylaşmak istediğin kameranın bilgilerini girerek yayını başlat.</p>
+        <button id="openPublishDialog" class="button button-primary" type="button">Kamera paylaş</button>
+      </div>
+
+      <div id="publisherDashboard" class="publisher-dashboard hidden">
+        <div class="publisher-live-status"><span></span> Yayının aktif</div>
+        <p id="publisherViewerCount" class="publisher-viewer-count" aria-live="polite" aria-atomic="true">0 kişi izliyor</p>
+        <button id="stopPublishing" class="button button-danger" type="button">Yayını durdur</button>
+      </div>
+      <p id="cameraStatus" class="status-message" role="status" aria-live="polite">Kameralar yükleniyor…</p>
+    </section>
+
+    <section class="feeds-panel" aria-labelledby="feedsTitle">
+      <div class="feeds-heading">
+        <div>
+          <p class="eyebrow">PAYLAŞILAN YAYINLAR</p>
+          <h2 id="feedsTitle">Canlı kameralar <span id="feedCount" class="feed-count">0</span></h2>
+        </div>
+        <span class="live-indicator"><span></span> CANLI</span>
+      </div>
+      <div id="cameraList" class="camera-grid"></div>
+      <div id="emptyState" class="empty-state hidden">
+        <div class="empty-icon" aria-hidden="true">◎</div>
+        <h3>Henüz paylaşılmış kamera yok</h3>
+        <p>Bir kullanıcı kamera yayını başlattığında burada görünür.</p>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="publishDialog" class="publish-dialog" aria-labelledby="publishDialogTitle">
+    <form id="publishForm" class="publish-dialog-content">
+      <button id="closePublishDialog" class="dialog-close" type="button" aria-label="Pencereyi kapat">×</button>
+      <p class="eyebrow">YENİ YAYIN</p>
+      <h2 id="publishDialogTitle">Kamera paylaş</h2>
+      <p class="dialog-description">Yayın bilgilerini gir ve kameranı paylaşmaya başla.</p>
+
+      <label class="field-label" for="cameraName">Kamera adı</label>
+      <input id="cameraName" type="text" maxlength="32" autocomplete="off" placeholder="Örn. Bahçe kamerası" required>
+
+      <label class="field-label password-field-label" for="cameraPassword">İzleme şifresi <span>(isteğe bağlı)</span></label>
+      <input id="cameraPassword" type="password" maxlength="128" autocomplete="new-password" placeholder="Şifresiz paylaşmak için boş bırak">
+
+      <div class="privacy-notice">
+        <strong>Herkese açık yayın</strong>
+        <p>Şifre belirlemezsen bu sayfaya erişen herkes izleyebilir. Şifre koyarsan yalnızca doğru şifreyi girenler izleyebilir.</p>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="cancelPublishDialog" class="button button-watch" type="button">Vazgeç</button>
+        <button id="startPublishing" class="button button-primary" type="submit">Yayını başlat</button>
+      </div>
+      <p id="publishDialogStatus" class="status-message" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <dialog id="watchPasswordDialog" class="publish-dialog" aria-labelledby="watchPasswordTitle">
+    <form id="watchPasswordForm" class="publish-dialog-content">
+      <button id="closeWatchPasswordDialog" class="dialog-close" type="button" aria-label="Pencereyi kapat">×</button>
+      <p class="eyebrow">ŞİFRELİ KAMERA</p>
+      <h2 id="watchPasswordTitle">Kamerayı izle</h2>
+      <p id="watchPasswordCameraName" class="dialog-description"></p>
+
+      <label class="field-label" for="watchPassword">İzleme şifresi</label>
+      <input id="watchPassword" type="password" maxlength="128" autocomplete="current-password" required>
+      <p id="watchPasswordStatus" class="status-message" role="status" aria-live="polite"></p>
+
+      <div class="dialog-actions">
+        <button id="cancelWatchPasswordDialog" class="button button-watch" type="button">Vazgeç</button>
+        <button id="submitWatchPassword" class="button button-primary" type="submit">Şifreyle izle</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/kamera.js"></script>
+</body>
+</html>
