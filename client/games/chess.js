@@ -91,7 +91,13 @@ function renderChessState(state) {
     previousState.board[last.to] !== state.board[last.to];
 
   if (chessScore) {
-    chessScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
+    renderGameScoreboard(
+      chessScore,
+      state.player1 ? getParticipantDisplayName(state.player1) : 'Oyuncu 1',
+      state.score1,
+      state.player2 ? getParticipantDisplayName(state.player2) : 'Oyuncu 2',
+      state.score2
+    );
   }
 
   let status = 'Bekleniyor...';

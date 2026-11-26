@@ -196,7 +196,13 @@ function renderBackgammonState(state, preserveSelection = false) {
   backgammonBottomPoints.setAttribute('aria-label', me === 'player2' ? 'Tavla üst hanesi' : 'Tavla alt hanesi');
   const myTurn = state.currentTurn === me;
   const legalMoves = state.legalMoves || [];
-  backgammonScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
+  renderGameScoreboard(
+    backgammonScore,
+    state.player1 ? getParticipantDisplayName(state.player1) : 'Oyuncu 1',
+    state.score1,
+    state.player2 ? getParticipantDisplayName(state.player2) : 'Oyuncu 2',
+    state.score2
+  );
   renderCheckerStack(backgammonOffPlayer1, state.off.player1, 'player1', 'off-checker');
   renderCheckerStack(backgammonOffPlayer2, state.off.player2, 'player2', 'off-checker');
   backgammonOffPlayer1.setAttribute('aria-label', `Krem: ${state.off.player1} pul toplandı`);

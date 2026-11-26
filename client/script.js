@@ -60,6 +60,9 @@ const chatSendBtn = document.getElementById('chatSendBtn');
 const gamePanel = document.getElementById('gamePanel');
 const headerMenuBtn = document.getElementById('headerMenuBtn');
 const headerMenuOverlay = document.getElementById('headerMenuOverlay');
+const cameraMenuBtn = document.getElementById('cameraMenuBtn');
+const cameraMenuCloseBtn = document.getElementById('cameraMenuCloseBtn');
+const connectionsRail = document.getElementById('connectionsRail');
 const gameCatalog = document.getElementById('gameCatalog');
 const gamePending = document.getElementById('gamePending');
 const gameActive = document.getElementById('gameActive');
@@ -116,6 +119,36 @@ const backgammonRollBtn = document.getElementById('backgammonRollBtn');
 const backgammonStateRoot = document.getElementById('gameActiveBackgammon');
 const gameResetAcceptBtn = document.getElementById('gameResetAcceptBtn');
 const gameResetRejectBtn = document.getElementById('gameResetRejectBtn');
+
+function updateGamePanelAvailableSize(width, height) {
+  if (!gamePanel) return;
+  if (Number.isFinite(width)) {
+    gamePanel.style.setProperty('--game-panel-content-width', `${Math.max(0, width)}px`);
+  }
+  if (Number.isFinite(height)) {
+    gamePanel.style.setProperty('--game-panel-content-height', `${Math.max(0, height)}px`);
+  }
+}
+
+if (gamePanel && 'ResizeObserver' in window) {
+  const gamePanelResizeObserver = new ResizeObserver(([entry]) => {
+    updateGamePanelAvailableSize(entry.contentRect.width, entry.contentRect.height);
+  });
+  gamePanelResizeObserver.observe(gamePanel);
+} else if (gamePanel) {
+  const measureGamePanel = () => {
+    const styles = getComputedStyle(gamePanel);
+    const verticalPadding = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+    const horizontalPadding = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
+    updateGamePanelAvailableSize(
+      gamePanel.clientWidth - horizontalPadding,
+      gamePanel.clientHeight - verticalPadding
+    );
+  };
+  window.addEventListener('resize', measureGamePanel);
+  window.addEventListener('orientationchange', measureGamePanel);
+  measureGamePanel();
+}
 
 const savedDisplayName = localStorage.getItem(DISPLAY_NAME_STORAGE_KEY);
 if (savedDisplayName) displayNameInput.value = savedDisplayName;
@@ -179,7 +212,7 @@ function updateGameClockDisplays() {
       const remaining = Math.max(0, baseTime - elapsed);
       clock.querySelector('time').textContent = formatClockTime(remaining);
       clock.classList.toggle('is-active', state.clockRunningPlayer === player && !state.winner);
-      clock.classList.toggle('is-low', remaining <= 30_000 && !state.winner);
+      clock.classList.toggle('is-low', remaining <= 10_000 && !state.winner);
     });
   });
 }
@@ -227,6 +260,7 @@ joinBtn.addEventListener('click', () => {
 });
 
 socket.on('connect', () => {
+  socket.emit('game-visibility', document.visibilityState === 'visible');
   if (currentRoomId) {
     connectionStatus.textContent = 'Bağlantı yeniden kuruluyor...';
     socket.emit('resume-room', sessionStorage.getItem(ROOM_RESUME_TOKEN_KEY));
@@ -502,6 +536,31 @@ headerMenuOverlay?.addEventListener('click', (e) => {
   if (e.target === headerMenuOverlay) closeHeaderMenu();
 });
 
+function setCameraMenuOpen(isOpen) {
+  connectionsRail?.classList.toggle('is-open', isOpen);
+  connectionsRail?.setAttribute('role', isOpen ? 'dialog' : 'complementary');
+  connectionsRail?.setAttribute('aria-modal', String(isOpen));
+  document.body.classList.toggle('camera-overlay-open', isOpen);
+  cameraMenuBtn?.setAttribute('aria-expanded', String(isOpen));
+  cameraMenuBtn?.setAttribute('aria-label', isOpen ? 'Kameraları kapat' : 'Kameraları aç');
+  cameraMenuBtn?.setAttribute('title', isOpen ? 'Kameraları kapat' : 'Kameraları aç');
+}
+
+cameraMenuBtn?.addEventListener('click', () => {
+  const isOpen = !connectionsRail?.classList.contains('is-open');
+  setCameraMenuOpen(isOpen);
+  if (isOpen) cameraMenuCloseBtn?.focus();
+});
+
+cameraMenuCloseBtn?.addEventListener('click', () => {
+  setCameraMenuOpen(false);
+  cameraMenuBtn?.focus();
+});
+
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 900) setCameraMenuOpen(false);
+});
+
 // Chat panel
 function setChatOpen(isOpen) {
   chatPanel?.classList.toggle('is-open', isOpen);
@@ -520,7 +579,12 @@ chatToggleBtn?.addEventListener('click', () => {
 chatCloseBtn?.addEventListener('click', () => setChatOpen(false));
 chatPanelOverlay?.addEventListener('click', () => setChatOpen(false));
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && chatPanel?.classList.contains('is-open')) setChatOpen(false);
+  if (event.key !== 'Escape') return;
+  if (connectionsRail?.classList.contains('is-open')) {
+    setCameraMenuOpen(false);
+    cameraMenuBtn?.focus();
+  }
+  if (chatPanel?.classList.contains('is-open')) setChatOpen(false);
 });
 
 function addChatMessage(from, message, isOwn = false) {
@@ -698,7 +762,9 @@ async function keepGameScreenAwake() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') keepGameScreenAwake();
+  const isVisible = document.visibilityState === 'visible';
+  if (currentRoomId && socket.connected) socket.emit('game-visibility', isVisible);
+  if (isVisible) keepGameScreenAwake();
 });
 
 gameResetBtn?.addEventListener('click', () => {
@@ -833,6 +899,13 @@ async function createPeerConnection(userId, isOfferer = false) {
 
 function getParticipantDisplayName(userId) {
   return participantNames[userId] || `Oyuncu ${String(userId).slice(-4)}`;
+}
+
+function renderGameScoreboard(element, player1Name, player1Score, player2Name, player2Score) {
+  element.querySelector('[data-score-name="player1"]').textContent = player1Name;
+  element.querySelector('[data-score-value="player1"]').textContent = String(player1Score ?? 0);
+  element.querySelector('[data-score-name="player2"]').textContent = player2Name;
+  element.querySelector('[data-score-value="player2"]').textContent = String(player2Score ?? 0);
 }
 
 function getParticipantInitial(userId) {

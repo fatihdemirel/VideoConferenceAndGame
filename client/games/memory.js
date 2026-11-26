@@ -6,7 +6,7 @@ function renderMemoryState(state) {
   if (!state?.player1 || !state?.player2) {
     memoryBoard.replaceChildren();
     memoryStatus.textContent = 'İkinci oyuncu bekleniyor...';
-    if (memoryScore) memoryScore.textContent = '0 — 0';
+    if (memoryScore) renderGameScoreboard(memoryScore, 'Oyuncu 1', 0, 'Oyuncu 2', 0);
     return;
   }
 
@@ -18,7 +18,13 @@ function renderMemoryState(state) {
   memoryBoard.classList.toggle('is-large', columns === 6);
 
   if (memoryScore) {
-    memoryScore.textContent = `${getParticipantDisplayName(state.player1)}: ${state.score1 || 0} — ${getParticipantDisplayName(state.player2)}: ${state.score2 || 0}`;
+    renderGameScoreboard(
+      memoryScore,
+      getParticipantDisplayName(state.player1),
+      state.score1,
+      getParticipantDisplayName(state.player2),
+      state.score2
+    );
   }
 
   if (state.winner === 'draw') {

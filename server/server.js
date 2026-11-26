@@ -93,8 +93,10 @@ function createGameById(gameId, {
 
 function isGamePlayerConnected(game, player) {
   const playerId = player === 'player1' ? game.player1 : game.player2;
-  return typeof playerId === 'string' &&
-    (playerId.startsWith('bot-') || io.sockets.sockets.has(playerId));
+  if (typeof playerId !== 'string') return false;
+  if (playerId.startsWith('bot-')) return true;
+  const playerSocket = io.sockets.sockets.get(playerId);
+  return Boolean(playerSocket && playerSocket.gameVisible !== false);
 }
 
 function clearLingoTimer(roomId) {
@@ -557,6 +559,17 @@ function removeSocketFromRoom(socket) {
 
 io.on('connection', (socket) => {
   console.log('Yeni kullanıcı bağlandı:', socket.id);
+  socket.gameVisible = true;
+
+  socket.on('game-visibility', (isVisible) => {
+    if (typeof isVisible !== 'boolean') return;
+    socket.gameVisible = isVisible;
+    if (!socket.roomId) return;
+    const game = gameState.get(socket.roomId);
+    if (game?.gameId === 'lingo') scheduleLingoTurn(socket.roomId);
+    if (game?.clockMinutes) scheduleGameClock(socket.roomId, game);
+    if (game) emitGameState(socket.roomId);
+  });
 
   socket.on('camera-list-request', () => {
     socket.emit('camera-list', getCameraList());
